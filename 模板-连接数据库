@@ -1,0 +1,39 @@
+import pandas as pd
+import numpy as np
+import pymysql
+import datetime
+
+def data_out_sql(sql):
+    conn =  pymysql.connect(host = '10.1.1.200' #host属性
+                             ,user = 'tms_r' #用户名 
+                             ,password = '1'  #此处填登录数据库的密码
+                             ,db = 'tms' #数据库名
+                             , charset='utf8'
+                             )
+    # 创建游标
+    cursor = conn.cursor()
+    # 执行sql语句
+    cursor.execute(sql)
+    # 调出数据
+    data = cursor.fetchall()
+    # cols为字段信息 例如(('factory_id', 253, None, 6, 6, 0, False), ('szDeviceId', 253, None, 30, 30, 0, False),('update_time', 7, None, 19, 19, 0, False))
+    cols = cursor.description
+    # 执行
+    conn.commit()
+    conn.close()
+    # 将数据truple转换为DataFrame
+    col = []
+    for i in cols:
+        col.append(i[0])
+    data = list(map(list, data))
+    data = pd.DataFrame(data,columns=col)
+    
+    print(data)
+    return data
+
+sql='''
+select * from cas.compa
+limit 100
+'''
+
+df=data_out_sql(sql)
