@@ -1,0 +1,121 @@
+# =============================================================================
+# 当数据量太大，sql被kill掉时，sql改成按每天查询获取数据
+# 改造SQL，用{}和format来代入日期范围
+# =============================================================================
+
+
+import pandas as pd
+import numpy as np
+import pymysql
+import datetime
+# import time
+from datetime import timedelta
+from datetime import datetime
+# from business_calendar import Calendar, MO, TU, WE, TH, FR
+
+def data_out_sql(sql):
+    conn =  pymysql.connect(host = '10.1.1.200' #host属性
+                             ,user = 'tms_logistic_reader' #用户名 
+                             ,password = 'KE_3DFYb.7'  #此处填登录数据库的密码
+                             ,db = 'aukey_tms' #数据库名
+                             , charset='utf8'
+                             )
+    # 创建游标
+    cursor = conn.cursor()
+    # 执行sql语句
+    cursor.execute(sql)
+    # 调出数据
+    data = cursor.fetchall()
+    # cols为字段信息 例如(('factory_id', 253, None, 6, 6, 0, False), ('szDeviceId', 253, None, 30, 30, 0, False),('update_time', 7, None, 19, 19, 0, False))
+    cols = cursor.description
+    # 执行
+    conn.commit()
+    conn.close()
+    # 将数据truple转换为DataFrame
+    col = []
+    for i in cols:
+        col.append(i[0])
+    data = list(map(list, data))
+    data = pd.DataFrame(data,columns=col)
+    
+    print(data)
+    return data
+
+
+def datelist(beginDate, endDate):
+    # beginDate, endDate是形如‘20160601’的字符串或datetime格式
+    date_l=[datetime.strftime(x,'%Y-%m-%d') for x in list(pd.date_range(start=beginDate, end=endDate))]
+    return date_l
+
+
+def sql_date(start_date,end_date):
+    df_date = pd.DataFrame(data={'date_range':datelist(start_date,end_date)})
+    df_list=[]
+
+    for i in df_date['date_range'].index:
+
+        sql='''
+            SELECT
+            H.配送仓国家,
+            H.配送仓,
+            H.`国家` '目的国家',
+            H.`派送方式名称`,
+            H.`发货日期`,
+            H.`签收日期`,
+            DATEDIFF(H.`签收日期`,H.`发货日期`) '签收天数',
+            COUNT(1) '包裹数'
+            FROM 
+            (
+            SELECT
+            	d.package_number '包裹编号',
+            	g.country_name '配送仓国家',
+            	c.`name` '配送仓',
+            	O.country '国家',
+            	--         t.destination_country '收件人国家',
+            	t.carrier_code '派送方式名称',
+            	DATE(D.ship_time) '发货日期',
+            	MAX(
+            		CASE
+            		WHEN t. STATUS = 'delivered' THEN
+            			DATE(q.Date)
+            		ELSE
+            			NULL
+            		END
+            	) '签收日期'
+            FROM
+            	oversea_shipments.order_package_message D
+            LEFT JOIN oversea_shipments.order_package_relate R ON R.order_package_message_id = D.id
+            LEFT JOIN oversea_shipments.order_address_message O ON O.overseas_order_id = R.overseas_order_id
+            LEFT JOIN product_ms.stock c ON c.stock_id = d.stock_id
+            LEFT JOIN aukey_report.pmc_country_info g ON g.country_id = c.country_id
+            LEFT JOIN supply_sign.tracking_data t ON t.tracking_number = d.track_number
+            LEFT JOIN supply_sign.tracking_data_info_detail q ON q.tracking_number = t.tracking_number
+            WHERE
+            	d.ship_time >= DATE'{j}'
+            AND d.ship_time < DATE'{j}' +1
+            GROUP BY
+            	d.package_number,
+            	g.country_name,
+            	c.`name`,
+            	O.country,
+            	t.carrier_code,
+            	DATE(D.ship_time)
+            )H
+            GROUP BY 
+            H.配送仓国家,
+            H.配送仓,
+            H.`国家`,
+            H.`派送方式名称`,
+            H.`发货日期`,
+            H.`签收日期`
+        '''.format(j=df_date['date_range'][i])
+        df1=data_out_sql(sql)
+        df_list.append(df1)
+
+    df=pd.concat(df_list)
+    return df
+
+start_date='20210101'
+end_date='20210228'
+df1 = sql_date(start_date,end_date)
+
