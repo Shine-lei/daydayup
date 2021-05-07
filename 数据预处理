@@ -1,0 +1,188 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Mar  4 15:36:48 2021
+
+@author: Administrator
+"""
+
+
+# =============================================================================
+# 日期时间处理
+# =============================================================================
+
+# datetime64[ns]中获取年份
+df1['提货年份']=df1['提货时间'].dt.year
+
+# datetime64[ns]中获取月份
+df1['提货月份']=df1['提货时间'].dt.month
+
+# 时间转换成年月
+df['处理年月']=df['处理时间'].astype(str).apply(lambda x :x[:7]).tolist()
+data['发货年月']= strftime('%Y-%m',data['发货时间'])
+
+# 返回周数
+df['发货周数']=df['发货日期'].apply(lambda x : datetime.datetime.strptime(x,'%Y-%m-%d').isocalendar()[1])
+
+# 获取今天日期（不含时分秒）
+df['今天日期'] = time.strftime("%Y-%m-%d",time.localtime(int(time.time())))
+df['今天日期'] =pd.to_datetime(df['今天日期']) 
+
+# 计算两个日期之间的天数（数字）
+df['签收天数'] = df['签收时间']-df['处理时间']
+df['签收天数'] =df['签收天数'].map(lambda x:x.days)
+
+# object转datatime格式
+df1['发货时间']=pd.to_datetime(df1['发货时间'])
+data['入库时间']=data['入库时间'].astype('datetime64[ns]')
+
+# 计算两个日期之间的工作日天数（数字）
+from business_calendar import Calendar, MO, TU, WE, TH, FR
+cal = Calendar()
+dfc['出库天数_工作日'] =None
+for i in dfc['出库天数_工作日'].index:
+     dfc['出库天数_工作日'][i]=cal.busdaycount(dfc['处理时间'][i], dfc['发货时间'][i])#如果是dataframe需要用for循环
+     
+# 打印当下时间
+time4 = time.time()
+print('数据导出完成时间',time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(int(time4))))
+
+# 打印间隔时长
+time1 = time.time()
+time2 = time.time()
+print('导数耗时:',time.strftime("%H:%M:%S",time.gmtime(time2-time1)))
+
+
+# =============================================================================
+# EXCEL读取和写入  CSV读取与写入
+# =============================================================================
+
+# 读取EXCEL
+df2=pd.read_excel(r'E:\监控报表\海运门到仓时效看板\海运时效标准.xlsx',sheet_name='头程起始地分类')
+
+# 写入Excel（一个工作表）
+df20.to_csv(r'E:\监控报表\海运门到仓时效看板\[海运]海运门到仓数据.csv',index=False) # index=False 表示不写入编号
+
+# 写入excel（多个工作表）
+write = pd.ExcelWriter(r'E:\KPI\计算数据\时效专项\[海外仓时效]卡车转运出库签收时效.xlsx')
+df_s1.to_excel(write,sheet_name='按处理年月统计的达标率')
+df.to_excel(write,sheet_name='明细',index=False)
+write.save()
+
+
+# 读取csv
+data1 = pd.read_csv(r'E:\！分析\1916-大货呆滞数据\基础数据\李娜数据导出2018-01-01至2018-03-01.csv',engine='python',encoding='gbk')
+data2 = pd.read_csv(r'E:\！分析\1916-大货呆滞数据\基础数据\李娜数据导出2018-03-01至2018-06-01.csv',engine='python',encoding='utf-8')
+
+# =============================================================================
+# 关联表
+# =============================================================================
+
+# join表
+df=pd.merge(df1,df2,left_on='头程起始地',right_on='头程起始地',how='left')
+df=pd.merge(df,df3,left_on=['头程目的地','目的国'],right_on=['头程目的地','目的国'],how='left') #多个关联条件用[]
+
+# 拼接表
+data=pd.concat([data1,data2,data3,data4,data5])
+
+
+
+# =============================================================================
+# 处理行列数据
+# =============================================================================
+
+# 新增条件列
+df['是否已签收']=df.签收年月.apply(lambda  x : "否" if x== 'NaT' else "是") #文本
+df_r['是否已签收'] = df_r.签收日期.apply(lambda  x : "否" if x== None else "是") #空值
+
+# 新增条件列
+df20['时效标准-月']=None
+for i in df20['时效标准-月'].index:
+    if df20['提货年份'][i]==2020:
+        df20['时效标准-月'][i]=df20['目标时效2020'][i]
+    else:
+        df20['时效标准-月'][i]=df20['月度时效标准'][i]
+
+# 删除列
+df20=df20.drop(['月度时效标准','季度时效标准','年度时效标准','目标时效2020','季度时效标准2020','年度时效标准2020'],axis=1) 
+
+# 删除筛选行
+zt=zt.drop(zt[zt['未到货数量']==0].index,axis=0)
+
+# 重命名列
+df20.rename(columns={'时效标准-月':'月度时效标准','时效标准-季':'季度时效标准','时效标准-年':'年度时效标准'},inplace = True)
+
+# 筛选行
+df = df1.loc[df1['卡车判断']=='卡车'] # 筛选等于某值的行
+df_w = df.loc[df['始发国'].isnull()] # 筛选为空的行
+df_r = df.loc[df['始发国'].isnull()==False] # 筛选不为空的行
+yc1=dfc.loc[dfc['sku发货数量']/dfc['SKU包裹数量']>50] #筛选字段运算结果
+
+# 筛选列
+xldd = xldd[['柜号','承运商线路名称','头程起始地','头程目的地','目的国','提货时间']]
+
+# 获取多列中最大/最小值
+df['入库时间'] = df[['跟踪-部分入库时间','跟踪-部分入库时间','调拨单-入库时间']].min(axis=1)
+
+# 更改字段格式
+df['入库时间']=df['入库时间'].astype(str) #字符串
+data['入库时间']=data['入库时间'].astype('datetime64[ns]') #日期时间
+df_r['入库天数_工作日']=df_r['入库天数_工作日'].astype(int) #整数
+
+# dataframe 去重
+df = df.drop_duplicates()
+
+# 去重后，并转成dataframe
+df_k= pd.DataFrame(list(set(df['收货国家'].loc[df['国家二字码'].isnull()]))) #这里筛选了国家二字码为空的行
+
+# 填充，替换
+df['入库时间'].replace('NaT','2030-01-01',inplace=True)	 # 替换
+df_s['实际分区'].fillna('未匹配分区',inplace=True) #填充空值
+
+
+# 复制列
+df_r['入库天数_工作日'] =df_r['实际到仓时间'].copy()
+
+# 新增分段/分组列
+data['天数分段']= pd.cut(data['总时长'],[0,50,55,60,65,70,80,90,100,1000],
+                     labels=['0-50','50-55','55-60','60-65','65-70','70-80','80-90','90-100','>100'])
+
+# 排序
+df3.sort_values(by=['SKU','仓库名称','创建日期'],ascending=False,inplace=True)
+# 重置索引
+df3.reset_index(drop=True)
+
+
+# =============================================================================
+# 数据透视表
+# =============================================================================
+
+# 求和
+df_s1 = df.pivot_table(index=['处理年月','是否达标'],values=['箱数'],aggfunc=np.sum)   
+
+# 计数
+df_s2 = df_r.pivot_table(index=['入库月份','月度是否达标1'],values=['柜号'],aggfunc={'柜号':len})#月度是否达标
+
+# 平均值
+df_s4 = df_r.pivot_table(index=['入库月份'],values=['入库天数_自然日','入库天数_工作日'],
+                       aggfunc={'入库天数_自然日':np.mean,'入库天数_工作日':np.mean})
+
+# 百分位数 
+df_s1 = df_r.pivot_table(index=['入库月份'],values=['入库天数_自然日','入库天数_工作日'],
+                       aggfunc={'入库天数_自然日':(lambda x : np.percentile(x,90)),'入库天数_工作日':(lambda x : np.percentile(x,90))})
+
+# 不重复计数
+jxcs1 = jxc.pivot_table(index=['SKU','创建日期'],values=['入库数量','出库数量','实际库存','仓库所在区域'],
+                aggfunc={'入库数量':np.sum,'出库数量':np.sum,'实际库存':np.sum,'仓库所在区域': (lambda x :len(x.unique()))})
+
+
+# groupby透视
+dfce=dfc.pivot_table(index=['发货年月','实际分区'],values=['sku发货数量','SKU包裹数量'],aggfunc={'sku发货数量':np.sum,'SKU包裹数量':np.sum})
+dfce['sku% of Total'] = dfce['sku发货数量'] /dfce['sku发货数量'] .sum() * 100
+dfce['sku% of 发货年月'] = dfce['sku发货数量'] / dfce.groupby(level= 0 ).sku发货数量.transform(sum) * 100
+dfce['包裹% of 发货年月'] = dfce['SKU包裹数量'] / dfce.groupby(level= 0 ).SKU包裹数量.transform(sum) * 100
+dfce.loc['total', :] = dfce.sum().values
+
+
+
+os.system("python E:\监控报表\海运预约送仓监控报表\预约送仓快照数据V2.py")
+
