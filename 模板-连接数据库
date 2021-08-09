@@ -1,13 +1,30 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Feb  5 15:21:49 2021
+
+@author: Administrator
+"""
 import pandas as pd
 import numpy as np
 import pymysql
 import datetime
+from retrying import retry  # => 引入retry装饰器
 
+d = pd.read_excel(r'E:\数据库密码.xlsx')
+pby = d['密码'][0]
+pzf = d['密码'][1]
+p = d['密码'][2]  #ftp
+
+
+# =============================================================================
+# #连接佰易数据库  数据库密码通过读取本地EXCEL文件获取
+# =============================================================================
+@retry(stop_max_attempt_number=5)   #装饰你想重试的函数，注意这里有括号,stop_max_attempt_number 最大重试次数
 def data_out_sql(sql):
     conn =  pymysql.connect(host = '10.1.1.200' #host属性
-                             ,user = 'tms_r' #用户名 
-                             ,password = '1'  #此处填登录数据库的密码
-                             ,db = 'tms' #数据库名
+                             ,user = 'tms_logistic_reader' #用户名 
+                             ,password = pby  #此处填登录数据库的密码
+                             ,db = 'aukey_tms' #数据库名
                              , charset='utf8'
                              )
     # 创建游标
@@ -32,8 +49,307 @@ def data_out_sql(sql):
     return data
 
 sql='''
-select * from cas.compa
-limit 100
+SELECT 
+DISTINCT
+B.container_number '柜号',
+date(C.actual_time) '预计到仓时间',
+date(c.update_time) '更新时间'
+FROM aukey_tms.logistics_transport_segment_time C
+LEFT JOIN aukey_tms.logistics_transport_segment B ON  B.logistics_transport_segment_id=C.logistics_transport_segment_id #发货单状态详情表
+WHERE  C.current_state IN('1180','1280')
+ORDER BY B.container_number,date(c.update_time)
 '''
-
 df=data_out_sql(sql)
+# df.to_csv(r'E:\KPI\计算数据\test.csv',index=False)
+
+# =============================================================================
+# #连接新自发货数据库  数据库密码通过读取本地EXCEL文件获取
+# =============================================================================
+def data_out_sql2(sql):
+    conn =  pymysql.connect(host = '124.71.29.251' #host属性
+                             ,user = 'tms_logistic_reader' #用户名 
+                             ,password = pzf  #此处填登录数据库的密码
+                             ,db = 'oversea_self_shipment_order_center' #数据库名
+                             , charset='utf8'
+                             )
+    # 创建游标
+    cursor = conn.cursor()
+    # 执行sql语句
+    cursor.execute(sql)
+    # 调出数据
+    data = cursor.fetchall()
+    # cols为字段信息 例如(('factory_id', 253, None, 6, 6, 0, False), ('szDeviceId', 253, None, 30, 30, 0, False),('update_time', 7, None, 19, 19, 0, False))
+    cols = cursor.description
+    # 执行
+    conn.commit()
+    conn.close()
+    # 将数据truple转换为DataFrame
+    col = []
+    for i in cols:
+        col.append(i[0])
+    data = list(map(list, data))
+    data = pd.DataFrame(data,columns=col)
+    
+    print(data)
+    return data
+
+
+# =============================================================================
+# 分批查询数据，然后将结果合并成一个dataframe
+# =============================================================================
+@retry(stop_max_attempt_number=5)   #装饰你想重试的函数，注意这里有括号,stop_max_attempt_number 最大重试次数
+def sql_date(start_date,end_date):
+    df_date = pd.DataFrame(data={'date_range':[datetime.strftime(x,'%Y-%m-%d') for x in list(pd.date_range(start=start_date, end=end_date))]})
+    df_list=[] 
+    for i in df_date['date_range'].index:
+
+        sql='''
+        # 海外仓自发货明细
+        SELECT 
+        BG.*,
+        GJ.StatusDescription '最新轨迹',
+        GJ1.StatusDescription '第一条轨迹'
+        FROM 
+        (
+        SELECT 
+        M.CODE '轨迹抓取',
+		IFNULL(cc.shipment_type_name, t2.shipment_type)  as shipment_type ,
+        B.package_number '包裹编号',
+        B.track_number '追踪号',
+        SYB.NAME '事业部',
+        case 
+        when b.order_source =1 THEN 'eBay'
+        when b.order_source =2 THEN 'Amazon'
+        else pt.CN_NAME end '平台名称',
+        B.account_id '账号ID',
+        C.`name` '配送仓',
+        -- G.country_name '发货国家',
+        O.country '收件国家',
+        LEFT(O.post_code,3) '邮编前三位',
+        T.carrier_code '派送方式名称',
+        B.create_time '创建时间',
+        B.push_time '推送时间',
+        B.ship_time '发货时间',
+        t2.latest_ship_date '订单最晚发货日期',
+        CASE B.package_status
+        WHEN  '0' THEN  '待推送'
+        WHEN  '1' THEN  '已截包'
+        WHEN  '2' THEN  '待发货'
+        WHEN  '3' THEN  '已发货'
+        WHEN  '4' THEN  '已取消' ELSE B.package_status END '包裹状态',
+        t. STATUS '货物状态',
+OL.ONLINE_TIME '上网时间',
+        MAX(q.Date ) '最新轨迹日期',
+        MIN(q.Date) '第一条轨迹日期'
+        FROM oversea_shipments.order_package_message B
+        LEFT JOIN product_ms.stock C ON B.stock_id=C.stock_id
+        -- LEFT JOIN aukey_report.pmc_country_info G ON G.country_id =C.country_id
+        LEFT JOIN oversea_shipments.order_package_relate R ON R.order_package_message_id = B.id
+        LEFT JOIN oversea_shipments.order_address_message O ON O.overseas_order_id = R.overseas_order_id
+        LEFT JOIN supply_sign.tracking_data t ON t.tracking_number = B.track_number
+        LEFT JOIN supply_sign.tracking_data_info_detail q ON q.tracking_number = t.tracking_number 
+LEFT JOIN(SELECT
+	Q1.tracking_number,
+	MIN(Q1.DATE) ONLINE_TIME
+FROM
+	supply_sign.tracking_data_info_detail Q1
+LEFT JOIN (
+	SELECT
+		tracking_number,
+		MIN(DATE) MIN_TIME
+	FROM
+		supply_sign.tracking_data_info_detail
+	WHERE
+		tracking_number IN (
+			SELECT
+				track_number
+			FROM
+				oversea_shipments.order_package_message
+			WHERE
+				create_time >= DATE '{j}'
+			AND create_time < DATE '{j}'+ 1
+		)
+	GROUP BY
+		tracking_number
+) Q2 ON Q1.tracking_number = Q2.tracking_number
+WHERE
+	Q1.tracking_number IN (
+		SELECT
+			track_number
+		FROM
+			oversea_shipments.order_package_message
+		WHERE
+			create_time >= DATE '{j}'
+		AND create_time < DATE '{j}'+ 1
+	) 
+AND Q1.DATE>Q2.MIN_TIME
+GROUP BY 	Q1.tracking_number
+) OL ON OL.tracking_number=T.tracking_number
+        LEFT JOIN product_ms.sku s ON S.CODE=r.sku_code
+        LEFT JOIN cas.company_org SYB ON s.org_id=SYB.id
+        LEFT JOIN oversea_shipments.overseas_order t2 ON r.overseas_order_id = t2.id AND t2.data_status='0'
+		LEFT JOIN oversea_shipments.overseas_stock_carrier CC ON  t2.shipment_type = cc.shipment_type and t2.stock_id=cc.stock_id
+		LEFT JOIN supply_sign.tracking_delivery_mapping M ON M.delivery = IFNULL(cc.shipment_type_name, t2.shipment_type)
+        LEFT JOIN 
+        (SELECT 
+O.account_id,
+O.account_name ,
+P.CN_NAME  FROM product_ms.other_account  O
+LEFT JOIN product_ms.platform P ON O.platform_id=P.platform_id ) PT ON PT.account_id=B.account_id
+        
+        WHERE B.create_time >= DATE'{j}'
+        AND B.create_time < DATE'{j}'  +1
+        GROUP BY 
+        M.CODE ,
+        B.package_number ,
+        B.track_number 
+               ) BG 
+        LEFT JOIN supply_sign.tracking_data_info_detail GJ ON GJ.tracking_number = BG.追踪号 AND BG.最新轨迹日期=GJ.DATE
+        LEFT JOIN supply_sign.tracking_data_info_detail GJ1 ON GJ1.tracking_number = BG.追踪号 AND BG.第一条轨迹日期=GJ1.DATE
+
+        '''.format(j=df_date['date_range'][i])
+        df1=data_out_sql(sql)
+        df_list.append(df1)
+    df=pd.concat(df_list)
+    return df
+
+
+# =============================================================================
+# 分批查询结果，并将结果分批传入另一个查询中，将两个导出数据合并成一个dataframe
+# =============================================================================
+@retry(stop_max_attempt_number=5)   #装饰你想重试的函数，注意这里有括号,stop_max_attempt_number 最大重试次数
+def sql_date2(start_date,end_date):
+    df_date = pd.DataFrame(data={'date_range':[datetime.strftime(x,'%Y-%m-%d') for x in list(pd.date_range(start=start_date, end=end_date))]})
+    df_list=[]
+    for i in df_date['date_range'].index:
+        sql='''
+        SELECT 
+        B.package_number '包裹编号',
+        B.tracking_number '追踪号',
+        B.department_name  '事业部',
+        B.platform_name '平台名称',  #新增
+        B.account_id  '账号ID', #新增
+        B.warehouse_name '配送仓',
+        D.country '收件国家',
+        LEFT(D.zip,3) '邮编前三位',
+        B.shipment_type 'shipment_type',
+        B.create_date '创建时间',
+        B.return_track_number_time '发货时间',
+        O.latest_ship_date '订单最晚发货日期', 
+        O.latest_delivery_date '订单最晚交货日期',
+        CASE B.package_status 
+        WHEN 0 THEN '新创建' 
+        WHEN 1 THEN '已配货' 
+        WHEN 2 THEN '待处理' 
+        WHEN 3 THEN '待推送' 
+        WHEN 4 THEN '待发货' 
+        WHEN 5 THEN '已发货' 
+        END '包裹状态'
+        FROM oversea_self_shipment_order_center.order_package B
+        LEFT JOIN oversea_self_shipment_order_center.package_address D ON B.package_number=D.package_number
+        LEFT JOIN oversea_self_shipment_order_center.order_match_package R ON B.package_number=R.package_order_id
+        LEFT JOIN oversea_self_shipment_order_center.amazon_order O ON R.platform_order_id=O.amazon_order_id
+        WHERE B.create_date >=DATE'{j}'
+        AND B.create_date <DATE'{j}' +1
+        AND B.package_status IN (0,1,2,3,4,5)
+        '''.format(j=df_date['date_range'][i])
+        df1=data_out_sql2(sql)
+        tn = list(set(df1['追踪号']))
+        def ad(x):
+            return "'"+str(x)+"'"
+        if len(tn)>0:
+            l = int(len(tn)/3000+1)+1
+            r = range(1,l)
+            df2_list = []
+            for i in range(1,l):
+                tni = tn[(i-1)*3000:i*3000]
+                tl = ','.join(map(ad, tni))
+                sql2='''
+				SELECT
+					BG.*, 
+					GJ.StatusDescription '最新轨迹',
+					GJ1.StatusDescription '第一条轨迹'
+				FROM
+					(
+						SELECT
+							T.tracking_number '追踪号',
+							T.carrier_code '派送方式名称',
+							t. STATUS '货物状态',
+							OL.ONLINE_TIME '上网时间',
+							MAX(q.Date) '最新轨迹日期',
+							MIN(q.Date) '第一条轨迹日期'
+						FROM
+							supply_sign.tracking_data t
+						LEFT JOIN supply_sign.tracking_data_info_detail q ON q.tracking_number = t.tracking_number
+						LEFT JOIN (
+							SELECT
+								Q1.tracking_number,
+								MIN(Q1.DATE) ONLINE_TIME
+							FROM
+								supply_sign.tracking_data_info_detail Q1
+							LEFT JOIN (
+								SELECT
+									tracking_number,
+									MIN(DATE) MIN_TIME
+								FROM
+									supply_sign.tracking_data_info_detail
+								WHERE
+									tracking_number IN ({t})
+								GROUP BY
+									tracking_number
+							) Q2 ON Q1.tracking_number = Q2.tracking_number
+							WHERE
+								Q1.tracking_number IN ({t})
+							AND Q1.DATE > Q2.MIN_TIME
+							GROUP BY
+								Q1.tracking_number
+						) OL ON OL.tracking_number = T.tracking_number
+						WHERE
+							T.tracking_number IN ({t})
+						GROUP BY
+							T.tracking_number
+					) BG
+				LEFT JOIN supply_sign.tracking_data_info_detail GJ ON GJ.tracking_number = BG.追踪号
+				AND BG.最新轨迹日期 = GJ.DATE
+				LEFT JOIN supply_sign.tracking_data_info_detail GJ1 ON GJ1.tracking_number = BG.追踪号
+				AND BG.第一条轨迹日期 = GJ1.DATE
+				'''.format(t=tl)
+                df2_list.append(data_out_sql(sql2))
+            df2=pd.concat(df2_list)
+            df1= pd.merge(df1,df2,left_on='追踪号',right_on='追踪号',how='left')
+        else:
+            df1=df1
+        
+        df_list.append(df1)
+    df=pd.concat(df_list)
+    return df
+
+
+# =============================================================================
+# 上传文件到FTP服务器
+# =============================================================================
+from ftplib import FTP
+
+@retry(stop_max_attempt_number=5)   #装饰你想重试的函数，注意这里有括号,stop_max_attempt_number 最大重试次数
+def ftp_upload(localfile,remotepath):
+    
+    host = '139.159.193.236'        #ftp地址
+    port = 801                      #端口号
+    timenout = 30                   #超时时间
+    username = 'file02'             #ftp用户名
+    password = p   #ftp 密码
+    # localfile = r'E:\dashboard_data\fba_return\d2.xlsx'      #本机要上传的文件与路径
+    # remotepath = '/fba_return/'           #ftp服务器的路径 (ftp://139.159.193.236/test)
+    f = FTP()
+    # f.set_debuglevel(2)
+    f.connect(host, port, timenout)  #连接ftp服务器
+    f.login(username, password)     #登录ftp服务器
+    # f.dir()
+    f.cwd(remotepath)              #设置ftp服务器端的路径
+    file_name = open(localfile, 'rb')    #打开本地文件
+    f.storbinary('STOR %s' % os.path.basename(localfile), file_name)  #上传文件到ftp服务器
+    file_name.close()   #关闭本地文件
+    f.quit()       #退出
+    
+ftp_upload(r'E:\dashboard_data\oversea-selfshipment\d1.xlsx','/oversea-selfshipment/') 
+
