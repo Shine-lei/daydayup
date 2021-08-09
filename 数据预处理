@@ -42,6 +42,10 @@ dfc['出库天数_工作日'] =None
 for i in dfc['出库天数_工作日'].index:
      dfc['出库天数_工作日'][i]=cal.busdaycount(dfc['处理时间'][i], dfc['发货时间'][i])#如果是dataframe需要用for循环
      
+# 或者用apply lambda的方式实现
+cal = Calendar()
+kb2['推送工作日天数'] = kb2.apply(lambda x : cal.busdaycount(x.推送时间_如空取创建时间,today),axis=1)
+     
 # 打印当下时间
 time4 = time.time()
 print('数据导出完成时间',time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(int(time4))))
@@ -78,23 +82,37 @@ data2 = pd.read_csv(r'E:\！分析\1916-大货呆滞数据\基础数据\李娜�
 # =============================================================================
 
 # join表
-df=pd.merge(df1,df2,left_on='头程起始地',right_on='头程起始地',how='left')
+df=pd.merge(df1,df2,left_on='头程起始地',right_on='头程起始地',how='left')  #左连接
+df=pd.merge(df1,df2,left_on='头程起始地',right_on='头程起始地',how='outer') #
 df=pd.merge(df,df3,left_on=['头程目的地','目的国'],right_on=['头程目的地','目的国'],how='left') #多个关联条件用[]
 
-# 拼接表
-data=pd.concat([data1,data2,data3,data4,data5])
 
+# 拼接表
+data=pd.concat([data1,data2,data3,data4,data5])         #默认是纵向
+data=pd.concat([data1,data2,data3,data4,data5],axis=0)  #纵向拼接  
+data=pd.concat([data1,data2,data3,data4,data5],axis=1)  #横向拼接
+
+
+# =============================================================================
+# 复制表
+# =============================================================================
+kb = df.copy(deep=True)  # kb = df的复制方式，有些改动不会写入/修改df，导致出错  
 
 
 # =============================================================================
 # 处理行列数据
 # =============================================================================
 
-# 新增条件列
+# 新增条件列  if else 语句，结合 apply lambda自定义函数
 df['是否已签收']=df.签收年月.apply(lambda  x : "否" if x== 'NaT' else "是") #文本
 df_r['是否已签收'] = df_r.签收日期.apply(lambda  x : "否" if x== None else "是") #空值
+#针对dataframe中多列的条件，用axis=1   # pd.isna(x.推送时间)判断为空方式
+kb['推送时间_如空取创建时间'] = kb.apply(lambda x : x.创建时间 if pd.isna(x.推送时间) else x.推送时间 , axis=1)  
+kb['发货时间_周几']  = kb.apply(lambda x :  x.发货时间.weekday() if pd.isna(x.发货时间)==False else 8 ,axis=1)   # weekday 0~6对应周一到周天，这里8代表发货时间为空
+kb4['发货时间'] = kb4.apply(lambda x: datetime.strptime(x.发货时间,'%Y-%m-%d') if len(x.发货时间)==10   else None ,axis=1 )  # 如果返回空值，用None表示
 
-# 新增条件列
+
+# 新增条件列（用循环语句实现）
 df20['时效标准-月']=None
 for i in df20['时效标准-月'].index:
     if df20['提货年份'][i]==2020:
@@ -122,22 +140,62 @@ xldd = xldd[['柜号','承运商线路名称','头程起始地','头程目的地
 
 # 获取多列中最大/最小值
 df['入库时间'] = df[['跟踪-部分入库时间','跟踪-部分入库时间','调拨单-入库时间']].min(axis=1)
+df['计划创建时间/改仓时间'] = df[['计划创建时间','创建改仓时间']].max(axis=1)
 
 # 更改字段格式
 df['入库时间']=df['入库时间'].astype(str) #字符串
-data['入库时间']=data['入库时间'].astype('datetime64[ns]') #日期时间
 df_r['入库天数_工作日']=df_r['入库天数_工作日'].astype(int) #整数
+d1['y'] = round(d1['y'],1)  # 保留一位小数点
+d3['超时未上网比例'] = (d3['超时未上网数据']/d3['已发货数据']).apply(lambda x : format(x,'0.1%'))  #修改成保留以为小数点的百分位数
+
+data['入库时间']=data['入库时间'].astype('datetime64[ns]') #日期时间
+kb2['推送时间_如空则取创建时间'] = kb2['推送时间_如空取创建时间'].apply(lambda x: datetime.strptime(str(x)[:10],'%Y-%m-%d'))  # 去除时分秒
+d2['推送时间_如空取创建时间'] = d2['推送时间_如空取创建时间'].apply(lambda x :datetime.strftime(x,'%m/%d'))   #修改日期格式
+kb6['发货日期']  = pd.to_datetime(kb6['发货时间'])  #将object改成datetime格式
 
 # dataframe 去重
 df = df.drop_duplicates()
 
+qc1 = df1[['SKU','SKU名称','仓库名称','事业部名称']].drop_duplicates(subset=['SKU','SKU名称','仓库名称','事业部名称']) 
+
 # 去重后，并转成dataframe
 df_k= pd.DataFrame(list(set(df['收货国家'].loc[df['国家二字码'].isnull()]))) #这里筛选了国家二字码为空的行
+t11 = pd.DataFrame(list(set(kb['配送仓'])))
 
-# 填充，替换
+# 生成dataframe
+kb1_by = pd.DataFrame({'x':[kb11,kb11,kb11],'y':[kb12/kb15*100,kb13/kb15*100,kb14/kb15*100],'s':['s1','s2','s3']})
+
+nianyue_list=[]
+for i in range(-6,1):
+    j = today - timedelta(days = today.day-1) + relativedelta(months = i)
+    j = str(j)[:7]
+    nianyue_list.append(j)
+d1 = pd.DataFrame({'x':nianyue_list})
+
+d8 = pd.DataFrame({'value1':d81,'value2':d82,'value3':d83,'value4':d84,'value5':d85,'value6':update_time},index=[0])
+
+# 填充，替换，查找
 df['入库时间'].replace('NaT','2030-01-01',inplace=True)	 # 替换
+k3['航运时效']=k3['航运时效'].apply(lambda x:str(x).replace('[','').replace(']','').replace("'",""))  # 多次替换
 df_s['实际分区'].fillna('未匹配分区',inplace=True) #填充空值
 
+# 将replace替换 和 find查找功能 结合起来，可以实现截取部分数据的功能
+kb31['实体仓'] = kb31['配送仓'].apply(lambda x : x.replace('HK-','')[:x.replace('HK-','').find('-')] if pd.isna(x)==False else None )
+
+# 拼接字符
+tn = list(set(df1['追踪号']))
+def ad(x):
+    return "'"+str(x)+"'"
+if len(tn)>0:
+    l = int(len(tn)/3000+1)+1
+    r = range(1,l)
+    df2_list = []
+    for i in range(1,l):
+        tni = tn[(i-1)*3000:i*3000]
+        tl = ','.join(map(ad, tni))
+        
+# 统计字符出现次数
+df['爽约次数'] = df['备注信息'].apply(lambda x : x.count('爽约'))
 
 # 复制列
 df_r['入库天数_工作日'] =df_r['实际到仓时间'].copy()
@@ -146,18 +204,29 @@ df_r['入库天数_工作日'] =df_r['实际到仓时间'].copy()
 data['天数分段']= pd.cut(data['总时长'],[0,50,55,60,65,70,80,90,100,1000],
                      labels=['0-50','50-55','55-60','60-65','65-70','70-80','80-90','90-100','>100'])
 
-# 排序
-df3.sort_values(by=['SKU','仓库名称','创建日期'],ascending=False,inplace=True)
-# 重置索引
-df3.reset_index(drop=True)
+# 排序  更改索引
+df3.sort_values(by=['SKU','仓库名称','创建日期'],ascending=[False,True,False],inplace=True)
+df3 = df3.reset_index(drop=True)  # 重置索引  索引值不变
+d3.index = range(len(d3))  # 索引值变成从0开始
+
+dfz.reset_index(drop=True,inplace=True)
+
+
+
+# 包含
+df_t1 = df.loc[df['退货仓库'].str.contains('销毁|维修')==False]    # 多个字符用|分隔开，表示或的关系
 
 
 # =============================================================================
 # 数据透视表
 # =============================================================================
 
+# 关键参数  index 行 value运算值 aggfunc运算公式 margins 是否汇总  dropna 是否去除空值（默认为True剔除）  对于有空值的dataframe一定要注意这个，否则会出现明细项和汇总项结果不符情况
+kb32 = kb32.pivot_table(index=['实体仓'],values=['包裹编号'],aggfunc=(lambda x : len(x.unique())),margins=True,dropna=False)
+
+
 # 求和
-df_s1 = df.pivot_table(index=['处理年月','是否达标'],values=['箱数'],aggfunc=np.sum)   
+df_s1 = df.pivot_table(index=['处理年月','是否达标'],values=['箱数'],aggfunc=np.sum,margins=False)   # margins代表是否汇总，不填默认是false不汇总
 
 # 计数
 df_s2 = df_r.pivot_table(index=['入库月份','月度是否达标1'],values=['柜号'],aggfunc={'柜号':len})#月度是否达标
@@ -174,6 +243,17 @@ df_s1 = df_r.pivot_table(index=['入库月份'],values=['入库天数_自然日'
 jxcs1 = jxc.pivot_table(index=['SKU','创建日期'],values=['入库数量','出库数量','实际库存','仓库所在区域'],
                 aggfunc={'入库数量':np.sum,'出库数量':np.sum,'实际库存':np.sum,'仓库所在区域': (lambda x :len(x.unique()))})
 
+k1 = k1.pivot_table(index=['国+区域'],values=['柜号'],aggfunc={'柜号': (lambda x :len(x.unique()))},
+                    margins=True,dropna=False ).sort_values(by=['柜号'], ascending=False)  # 透视表排序 sort_values
+
+# 自定义函数  拼接 可用于盒须图
+k1 = k1.pivot_table(index=['国+区域'],values=['海运门到仓时效'],aggfunc=(lambda x : ','.join(x)))
+
+
+# 将透视表结果拆解成dataframe
+d2 = d2.pivot_table(index=['推送时间_如空取创建时间'],values=['包裹编号'],aggfunc=(lambda x : len(x.unique())))
+d2 = pd.DataFrame(d2.to_records()).iloc[:,:2]   #这里的2表示需要返回多少列数据  但如果透视表为空，则会报错
+
 
 # groupby透视
 dfce=dfc.pivot_table(index=['发货年月','实际分区'],values=['sku发货数量','SKU包裹数量'],aggfunc={'sku发货数量':np.sum,'SKU包裹数量':np.sum})
@@ -182,7 +262,64 @@ dfce['sku% of 发货年月'] = dfce['sku发货数量'] / dfce.groupby(level= 0 )
 dfce['包裹% of 发货年月'] = dfce['SKU包裹数量'] / dfce.groupby(level= 0 ).SKU包裹数量.transform(sum) * 100
 dfce.loc['total', :] = dfce.sum().values
 
+k2 =k2.groupby(['国+区域'])['上船时效'].apply(list).to_frame()
 
 
+
+# =============================================================================
+# os
+# =============================================================================
 os.system("python E:\监控报表\海运预约送仓监控报表\预约送仓快照数据V2.py")
 
+
+
+
+
+kb = df.copy(deep=True)
+
+# =============================================================================
+# sql
+# =============================================================================
+
+IFNULL(cc.shipment_type_name, t2.shipment_type)
+
+LEFT(O.post_code,3)
+
+DATE_FORMAT(bdr.create_date,'%Y-%m-%d') '创建日期',
+
+DATE_ADD(date'{j}',INTERVAL -9 WEEK) 
+DATE_ADD(DATE'{j}',INTERVAL 1 MONTH)
+
+SUBSTRING_INDEX(SUBSTRING_INDEX(C.`name`,'-',2),'-',-1)  '配送仓',
+
+CAST(DATE_ADD(DATE'{j}',INTERVAL 1 MONTH) AS DATE) 
+
+ DATE(NOW())
+
+
+# =============================================================================
+# # 传递参数 1、 format    2、%s
+# =============================================================================
+sql7='''
+SELECT
+package_number '包裹编号',
+operation_user '发货确认操作人'
+FROM oversea_shipments.order_package_log
+WHERE operation_type='发货确认'
+AND create_time >=DATE'{j}'
+AND operation_user !='跑批同步'
+GROUP BY package_number,operation_user
+'''.format(j=start_date)
+
+
+t = time.strftime("%Y%m%d",time.localtime(int(time.time())))
+
+
+
+
+
+# =============================================================================
+# 计算
+# =============================================================================
+# 不重复计数
+kb12 = len(kb12['包裹编号'].unique())
