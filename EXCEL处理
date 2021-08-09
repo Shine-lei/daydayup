@@ -1,0 +1,565 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Mar  5 12:37:29 2021
+
+@author: Administrator
+"""
+from openpyxl import Workbook, load_workbook
+
+# =============================================================================
+# 打开&新建
+# =============================================================================
+
+# =======================================================
+#### 第一步  打开workbook
+# =======================================================
+# 创建
+wb = Workbook()
+# 打开已有的文件
+wb = load_workbook(r'E:\监控报表\共享盘报表\数据源\海外仓出库数据.xlsx')
+
+# =======================================================
+#### 第二步  指定worksheet
+# =======================================================
+# 1-激活 worksheet
+ws = wb.active
+
+# 2-通过指定表名称读取表(以下两种均可)
+ws = wb.get_sheet_by_name('Sheet1')
+ws = wb['Sheet1']
+# 获取工作表名称列表
+wb.sheetnames 
+
+# 3-创建表（sheet）
+ws = wb.create_sheet("Mysheet", 0)  # 第二个参数表示添加表的起始位置，如果不填第二个参数，则表示默认从最后添加
+
+
+
+# =============================================================================
+# 储存数据
+# =============================================================================
+# 方式一：数据可以直接分配到单元格中(可以输入公式)
+ws['A1'] = 42
+# 方式二：可以附加行，从第一列开始附加(从最下方空白处，最左开始)(可以输入多行)
+ws.append([1, 2, 3])
+# 方式三：Python 类型会被自动转换
+ws['A3'] = datetime.datetime.now().strftime("%Y-%m-%d")
+123456
+
+
+
+wb.save(r'E:\专项分析\海外仓超时异常\海外仓异常通报数据-%s.xlsx'%t)
+
+# =============================================================================
+# 调整格式
+# =============================================================================
+from openpyxl import Workbook, load_workbook
+from openpyxl.utils import get_column_letter
+from openpyxl.styles import PatternFill, Border, Side, Alignment, Protection, Font
+
+
+# 设置格式
+font1 = Font(name='微软雅黑',size=11,bold=False,italic=False,vertAlign=None,underline='none',strike=False,color='FF000000')  
+font2 = Font(name='微软雅黑',size=11,bold=True,italic=False,vertAlign=None,underline='none',strike=False,color='FF000000')  
+#font(字体类)：name字体、size字号、bold是否粗体、italic是否斜体、vertAlign对齐？、underline下划线、strike删除线、字体颜色color、等
+fill = PatternFill('solid',fgColor='FCE4D6')
+# fill(填充类)：颜色等
+# 16进制颜色代码  ---# 前两位为透明度，透明度分为256阶（0-255），计算机用16进制表示（00-FF）# 后6位为颜色值，采用RGB配色（十六进制），000000为黑色，ffffff为白色
+
+border = Border(left=Side(style="thin",border_style=None,color='FF000000'),
+                right=Side(style="thin",border_style=None,color='FF000000'),
+                top=Side(style="thin",border_style=None,color='FF000000'),
+                bottom=Side(style="thin",border_style=None,color='FF000000'),
+                diagonal=Side(border_style=None,color='FF000000'),
+                diagonal_direction=0,
+                outline=Side(border_style=None,color='FF000000'),
+                vertical=Side(border_style=None,color='FF000000'),
+                horizontal=Side(border_style=None,color='FF000000'))
+# border(边框类)：设置单元格边框
+alignment=Alignment(horizontal='center',vertical='center',text_rotation=0,wrap_text=False,shrink_to_fit=False,indent=0)
+# alignment(位置类)：对齐方式
+number_format = 'General'
+# number_format(格式类)：数据格式
+protection = Protection(locked=True,hidden=False)
+# protection(保护类)：写保护
+
+
+# 循环遍历所有sheet 设置格式
+for i in range(len(wb.get_sheet_names())):
+    ws= wb.get_sheet_by_name(wb.get_sheet_names()[i])
+    # 所有设置微软雅黑字体，边框
+    for row in ws:
+        for cell in row:
+            cell.font = font1
+            cell.border = border
+    # 第一行设置粗体
+    for row in ws['A1:'+get_column_letter(ws.max_column)+str(1)]:
+        for cell in row:
+            cell.font = font2
+    # 倒数第二列设置填充颜色
+    for row in ws[get_column_letter(ws.max_column-1)+'1:'+get_column_letter(ws.max_column-1)+str(ws.max_row)]:
+        for cell in row:
+            cell.fill = fill
+
+# 设置列宽
+ws.column_dimensions['A'].width = 15
+
+
+# 先把原表中的合并单元格取消合并---# worksheet.merged_cells获取已经合并单元格的信息；再使用worksheet.unmerge_cells()拆分单元格；
+m_list = ws.merged_cells
+cr = []  #纵向
+rr = []  #横向
+for m_area in m_list:
+    # 合并单元格的起始行坐标、终止行坐标。。。。，
+    r1, r2, c1, c2 = m_area.min_row, m_area.max_row, m_area.min_col, m_area.max_col
+    # 纵向合并单元格的位置信息提取出
+    if r2 - r1 > 0:
+        cr.append((r1, r2, c1, c2))
+    # 横向合并单元格的位置信息提取出
+    if c2 - c1 > 0:
+        rr.append((r1, r2, c1, c2))
+for r in cr:
+    ws.unmerge_cells(start_row=r[0], end_row=r[1], start_column=r[2], end_column=r[3])
+for c in rr:
+    ws.unmerge_cells(start_row=c[0], end_row=c[1], start_column=c[2], end_column=c[3])
+
+# 先删除原表数据（不删表头）
+ws.delete_rows(4,ws.max_row-3) # 删除从第4行到最后一行的数据
+ws.delete_cols(10,ws.max_column-9) # 删除从第10列到最后一列的数据
+
+
+# 从指定位置，开始填充数据
+##Fill up the row and column needed
+stcol = 2  
+strow = 3 # 因后续函数中，有+1，所以这里比实际的要小1
+# ## Writing the column header  填充dataframe表头
+for c in range(0,len(df.columns)):
+    ws[get_column_letter(c+stcol)+str(strow)].value = df.columns[c]
+## Writing the data  填充dataframe
+for r in range(0,len(df)):
+    for c in range(0,len(df.columns)-1):
+        ws[get_column_letter(c+stcol)+str(strow+r+1)].value = df.iloc[r][c]
+
+
+#定义合并单元格的函数    
+def Merge_cells(ws,target_list,start_row,col):
+    '''
+    ws: 是需要操作的工作表
+    target_list: 是目标列表，即含有重复数据的列表
+    start_row: 是开始行，即工作表中开始比对数据的行（需要将标题除开）
+    col: 是需要处理数据的列
+    '''
+    start = 0 #开始行计数，初试值为0，对应列表中的第1个元素的位置0
+    end = 0 #结束行计数，初试值为0，对应列表中的第1个元素的位置0
+    reference = target_list[0] #设定基准，以列表中的第一个字符串开始
+    for i in range(len(target_list)): #遍历列表
+        if target_list[i] != reference: #开始比对，如果内容不同执行如下
+            reference = target_list[i] #基准变成列表中下一个字符串
+            end = i - 1 #列计数器
+            ws.merge_cells(col + str(start + start_row) + ":"+col + str(end + start_row))
+            start = end + 1
+        if i == len(target_list) - 1: #遍历到最后一行，按如下操作
+            end = i
+            ws.merge_cells(col + str(start + start_row) + ":"+ col + str(end + start_row))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# =============================================================================
+# 读取EXCEL数据
+# =============================================================================
+import os
+import os.path
+import collections
+#使用os模块walk函数，搜索出某目录下的全部excel文件
+def getFileName(filepath):
+    file_list = []
+    for root,dirs,files in os.walk(filepath):
+        for filespath in files:
+            print(os.path.join(root,filespath))
+            file_list.append(os.path.join(root,filespath))
+    return file_list
+#合并excel
+def MergeExcel(filepath1):                         #filepath1 文件夹路径 
+    file_list=getFileName(filepath1)
+    result=collections.defaultdict(pd.DataFrame)
+    df_list=[] 
+    #合并多个excel文件
+    for each in file_list:
+        #读取xlsx格式文件
+        data=pd.read_excel(each)
+        df_list.append(data)   
+    df=pd.concat(df_list)
+    return df
+huifu = MergeExcel(r'E:\监控报表\共享盘报表\特殊数据源\海外仓超时异常回复表')
+
+
+
+dir = '//10.1.1.20/物流部报表/tableau报表数据源/西邮/ReturnClaimOrderBase/'
+filenames = os.listdir(dir)
+index = 0
+dfs = []
+for name in filenames:
+	print(index)
+	dfs.append(pd.read_excel(os.path.join(dir,name)))
+	index += 1 #为了查看合并到第几个表格了
+df7 = pd.concat(dfs)
+
+
+
+wb = Workbook()
+
+#定义合并单元格的函数    
+def Merge_cells(ws,target_list,start_row,col):
+    '''
+    ws: 是需要操作的工作表
+    target_list: 是目标列表，即含有重复数据的列表
+    start_row: 是开始行，即工作表中开始比对数据的行（需要将标题除开）
+    col: 是需要处理数据的列
+    '''
+    start = 0 #开始行计数，初试值为0，对应列表中的第1个元素的位置0
+    end = 0 #结束行计数，初试值为0，对应列表中的第1个元素的位置0
+    reference = target_list[0] #设定基准，以列表中的第一个字符串开始
+    for i in range(len(target_list)): #遍历列表
+        if target_list[i] != reference: #开始比对，如果内容不同执行如下
+            reference = target_list[i] #基准变成列表中下一个字符串
+            end = i - 1 #列计数器
+            ws.merge_cells(col + str(start + start_row) + ":"+col + str(end + start_row))
+            start = end + 1
+        if i == len(target_list) - 1: #遍历到最后一行，按如下操作
+            end = i
+            ws.merge_cells(col + str(start + start_row) + ":"+ col + str(end + start_row))
+
+# 设置格式
+font = Font(name='微软雅黑',size=11,bold=False,italic=False,vertAlign=None,underline='none',strike=False,color='FF000000')  
+#font(字体类)：name字体、size字号、bold是否粗体、italic是否斜体、vertAlign对齐？、underline下划线、strike删除线、字体颜色color、等
+fill = PatternFill('solid',fgColor='bfbfbf')
+# fill(填充类)：颜色等
+# 16进制颜色代码  ---# 前两位为透明度，透明度分为256阶（0-255），计算机用16进制表示（00-FF）# 后6位为颜色值，采用RGB配色（十六进制），000000为黑色，ffffff为白色
+
+border = Border(left=Side(style="thin",border_style=None,color='FF000000'),
+                right=Side(style="thin",border_style=None,color='FF000000'),
+                top=Side(style="thin",border_style=None,color='FF000000'),
+                bottom=Side(style="thin",border_style=None,color='FF000000'),
+                diagonal=Side(border_style=None,color='FF000000'),
+                diagonal_direction=0,
+                outline=Side(border_style=None,color='FF000000'),
+                vertical=Side(border_style=None,color='FF000000'),
+                horizontal=Side(border_style=None,color='FF000000'))
+# border(边框类)：设置单元格边框
+alignment=Alignment(horizontal='center',vertical='center',text_rotation=0,wrap_text=False,shrink_to_fit=False,indent=0)
+# alignment(位置类)：对齐方式
+number_format = 'General'
+# number_format(格式类)：数据格式
+protection = Protection(locked=True,hidden=False)
+# protection(保护类)：写保护
+
+# =============================================================================
+# 1、导入dataframe到EXCEL表  --上月至今汇总和按天分类看板（仅限快递） df
+# =============================================================================
+ws = wb.create_sheet('上月至今汇总_快递')
+# 从指定位置，开始填充数据
+##Fill up the row and column needed
+stcol = 2  
+strow = 3 # 因后续函数中，有+1，所以这里比实际的要小1
+# ## Writing the column header
+# for c in range(0,len(df.columns)):
+#     ws[get_column_letter(c+stcol)+str(strow)].value = df.columns[c]
+## Writing the data
+for r in range(0,len(df)):
+    for c in range(0,len(df.columns)-1):
+        ws[get_column_letter(c+stcol)+str(strow+r+1)].value = df.iloc[r][c]
+
+# 填充序号    
+xuhao = range(1,len(df)+1)
+for i in xuhao:
+    ws['A'+str(i+3)].value = i
+
+# 填充日期  和表头
+date_range = pd.date_range(str(last_month_day)[:10],str(today+relativedelta(days = -1))[:10])
+for j in range(len(date_range)):
+    ws[get_column_letter(j*10+10)+str(1)].value = str(date_range[j])[:10]
+    ws[get_column_letter(j*10+10)+str(2)].value = '订单(按包裹数)'
+    ws[get_column_letter(j*10+10+5)+str(2)].value = '转运(按箱数)'
+    ws[get_column_letter(j*10+10)+str(3)].value = '计划发货'
+    ws[get_column_letter(j*10+10+1)+str(3)].value = '实际发货'
+    ws[get_column_letter(j*10+10+2)+str(3)].value = '差异'
+    ws[get_column_letter(j*10+10+3)+str(3)].value = '1工作日%'
+    ws[get_column_letter(j*10+10+4)+str(3)].value = '2工作日%'
+    ws[get_column_letter(j*10+10+5)+str(3)].value = '计划发货'
+    ws[get_column_letter(j*10+10+6)+str(3)].value = '实际发货'
+    ws[get_column_letter(j*10+10+7)+str(3)].value = '差异'
+    ws[get_column_letter(j*10+10+8)+str(3)].value = '2工作日%'
+    ws[get_column_letter(j*10+10+9)+str(3)].value = '3工作日%'
+ws['A1'] ='NO'
+ws['B1'] ='国家'
+ws['C1'] ='仓库'
+ts_max = max(date_range)
+ts_min = min(date_range)
+ws['D1'].value = '汇总(自发货：'+str(ts_min)[5:10]+'至'+(str(gzr2))[5:10]+'  转运快递:'+str(ts_min)[5:10]+'至'+(str(gzr3))[5:10]+')'
+ws['D2'].value = '订单(按包裹数)'
+ws['G2'].value = '转运(按箱数)'
+ws['D3'].value = '计划发货'
+ws['E3'].value = '实际发货'
+ws['F3'].value = '差异'
+ws['G3'].value = '计划发货'
+ws['H3'].value = '实际发货'
+ws['I3'].value = '差异'
+
+
+# 将国家列的重复项合并单元格
+country_list = [] #客户名称
+for row in range(4,ws.max_row):
+    country = ws['B' + str(row)].value
+    country_list.append(country)
+Merge_cells(ws,country_list,4,"B")
+
+for row in ws:
+    for cell in row:
+        cell.font = font
+        cell.border = border
+
+c = ws['A1:'+get_column_letter(ws.max_column)+str(3)]
+for row in c:
+    for cell in row:
+        cell.fill = fill
+        cell.alignment = alignment
+
+# 合并表头
+ws.merge_cells('A1:A3')
+ws.merge_cells('B1:B3')
+ws.merge_cells('C1:C3')
+ws.merge_cells('D1:I1')
+ws.merge_cells('D2:F2')
+ws.merge_cells('G2:I2')
+for j in range(len(date_range)):
+    ws.merge_cells(get_column_letter(j*10+10)+'1:'+get_column_letter(j*10+10+9)+'1')
+    ws.merge_cells(get_column_letter(j*10+10)+'2:'+get_column_letter(j*10+10+4)+'2')
+    ws.merge_cells(get_column_letter(j*10+10+5)+'2:'+get_column_letter(j*10+10+9)+'2')
+
+# 调整列宽
+ws.column_dimensions['A'].width = 5
+ws.column_dimensions['B'].width = 13
+ws.column_dimensions['C'].width = 24
+# 冻结窗格
+ws.freeze_panes = 'J4'
+
+# =============================================================================
+# 2、导入dataframe到EXCEL表  --年度累计（仅限快递） df_ny
+# =============================================================================
+ws = wb.create_sheet('年度累计_快递')
+
+
+# 从指定位置，开始填充数据
+##Fill up the row and column needed
+stcol = 2  
+strow = 3 # 因后续函数中，有+1，所以这里比实际的要小1
+# ## Writing the column header
+# for c in range(0,len(df.columns)):
+#     ws[get_column_letter(c+stcol)+str(strow)].value = df.columns[c]
+## Writing the data
+for r in range(0,len(df_ny)):
+    for c in range(0,len(df_ny.columns)-1):
+        ws[get_column_letter(c+stcol)+str(strow+r+1)].value = df_ny.iloc[r][c]
+
+# 填充序号    
+xuhao = range(1,len(df_ny)+1)
+for i in xuhao:
+    ws['A'+str(i+3)].value = i
+
+# 填充日期  和表头
+for j in df_nn_ny.index:
+    ws[get_column_letter(j*6+10)+str(1)].value = str(df_nn_ny[0][j])[:7]
+    ws[get_column_letter(j*6+10)+str(2)].value = '订单(按包裹数)'
+    ws[get_column_letter(j*6+10+3)+str(2)].value = '转运(按箱数)'
+    ws[get_column_letter(j*6+10)+str(3)].value = '计划发货'
+    ws[get_column_letter(j*6+10+1)+str(3)].value = '实际发货'
+    ws[get_column_letter(j*6+10+2)+str(3)].value = '差异'
+    ws[get_column_letter(j*6+10+3)+str(3)].value = '计划发货'
+    ws[get_column_letter(j*6+10+4)+str(3)].value = '实际发货'
+    ws[get_column_letter(j*6+10+5)+str(3)].value = '差异'
+
+ws['A1'] ='NO'
+ws['B1'] ='国家'
+ws['C1'] ='仓库'
+ts_max = max(list(df_nn_ny[0]))
+ts_min = min(list(df_nn_ny[0]))
+ws['D1'].value = '汇总('+str(ts_min)+'至'+str(ts_max)+')'
+ws['D2'].value = '订单(按包裹数)'
+ws['G2'].value = '转运(按箱数)'
+ws['D3'].value = '计划发货'
+ws['E3'].value = '实际发货'
+ws['F3'].value = '差异'
+ws['G3'].value = '计划发货'
+ws['H3'].value = '实际发货'
+ws['I3'].value = '差异'
+
+
+# 将国家列的重复项合并单元格
+country_list = [] #客户名称
+for row in range(4,ws.max_row):
+    country = ws['B' + str(row)].value
+    country_list.append(country)
+Merge_cells(ws,country_list,4,"B")
+
+for row in ws:
+    for cell in row:
+        cell.font = font
+        cell.border = border
+
+c = ws['A1:'+get_column_letter(ws.max_column)+str(3)]
+for row in c:
+    for cell in row:
+        cell.fill = fill
+        cell.alignment = alignment
+
+# 合并表头
+ws.merge_cells('A1:A3')
+ws.merge_cells('B1:B3')
+ws.merge_cells('C1:C3')
+ws.merge_cells('D1:I1')
+ws.merge_cells('D2:F2')
+ws.merge_cells('G2:I2')
+for j in range(len(df_nn_ny)):
+    ws.merge_cells(get_column_letter(j*6+10)+'1:'+get_column_letter(j*6+10+5)+'1')
+    ws.merge_cells(get_column_letter(j*6+10)+'2:'+get_column_letter(j*6+10+2)+'2')
+    ws.merge_cells(get_column_letter(j*6+10+3)+'2:'+get_column_letter(j*6+10+5)+'2')
+
+# 调整列宽
+ws.column_dimensions['A'].width = 5
+ws.column_dimensions['B'].width = 13
+ws.column_dimensions['C'].width = 24
+# 冻结窗格
+ws.freeze_panes = 'J4'
+
+
+# =============================================================================
+# 3、导入年度至今汇总和按天分类看板（转运卡车）df_k
+# =============================================================================
+ws = wb.create_sheet('年度累计_卡车')
+
+# 从指定位置，开始填充数据
+##Fill up the row and column needed
+stcol = 2  
+strow = 2 # 因后续函数中，有+1，所以这里比实际的要小1
+# ## Writing the column header
+# for c in range(0,len(df.columns)):
+#     ws[get_column_letter(c+stcol)+str(strow)].value = df.columns[c]
+## Writing the data
+for r in range(0,len(df_k)):
+    for c in range(0,len(df_k.columns)-1):
+        ws[get_column_letter(c+stcol)+str(strow+r+1)].value = df_k.iloc[r][c]
+
+df_k.iloc[0][391]
+# 填充序号    
+xuhao = range(1,len(df_k)+1)
+for i in xuhao:
+    ws['A'+str(i+3)].value = i
+
+# 填充日期  和表头
+for j in zyk_riqi.index:
+    ws[get_column_letter(j*3+7)+str(1)].value = str(zyk_riqi[0][j])[:10]
+    ws[get_column_letter(j*3+7)+str(2)].value = '计划发货'
+    ws[get_column_letter(j*3+7+1)+str(2)].value = '实际发货'
+    ws[get_column_letter(j*3+7+2)+str(2)].value = '差异'
+
+
+ws['A1'] ='NO'
+ws['B1'] ='国家'
+ws['C1'] ='仓库'
+ts_max = max(list(zyk_riqi[0]))
+ts_min = min(list(zyk_riqi[0]))
+ws['D1'].value = '汇总('+str(ts_min)+'至'+str(ts_max)+')'
+ws['D2'].value = '计划发货'
+ws['E2'].value = '实际发货'
+ws['F2'].value = '差异'
+
+
+
+# 将国家列的重复项合并单元格
+country_list = [] #客户名称
+for row in range(3,ws.max_row):
+    country = ws['B' + str(row)].value
+    country_list.append(country)
+Merge_cells(ws,country_list,3,"B")
+
+for row in ws:
+    for cell in row:
+        cell.font = font
+        cell.border = border
+
+c = ws['A1:'+get_column_letter(ws.max_column)+str(2)]
+for row in c:
+    for cell in row:
+        cell.fill = fill
+        cell.alignment = alignment
+
+# 合并表头
+ws.merge_cells('A1:A2')
+ws.merge_cells('B1:B2')
+ws.merge_cells('C1:C2')
+ws.merge_cells('D1:F1')
+
+for j in range(len(zyk_riqi)):
+    ws.merge_cells(get_column_letter(j*3+7)+'1:'+get_column_letter(j*3+7+2)+'1')
+
+
+# 调整列宽
+ws.column_dimensions['A'].width = 5
+ws.column_dimensions['B'].width = 13
+ws.column_dimensions['C'].width = 24
+# 冻结窗格
+ws.freeze_panes = 'G4'
+
+# =============================================================================
+# 4、导入dataframe到EXCEL表  --明细表 mx
+# =============================================================================
+ws = wb.create_sheet('明细')
+# ## Writing the column header
+for c in range(0,len(mx.columns)):
+    ws[get_column_letter(c+1)+str(1)].value = mx.columns[c]
+    ws[get_column_letter(c+1)+str(1)].font = font
+    ws[get_column_letter(c+1)+str(1)].border = border
+
+for r in range(0,len(mx)):
+    for c in range(0,len(mx.columns)):
+        ws[get_column_letter(c+1)+str(r+2)].value = mx.iloc[r][c]
+        ws[get_column_letter(c+1)+str(r+2)].font = font
+        ws[get_column_letter(c+1)+str(r+2)].border = border
+
+# 调整列宽
+ws.column_dimensions['A'].width = 13
+ws.column_dimensions['B'].width = 24
+ws.column_dimensions['C'].width = 24
+ws.column_dimensions['D'].width = 8
+ws.column_dimensions['E'].width = 10
+ws.column_dimensions['F'].width = 12
+ws.column_dimensions['G'].width = 12
+ws.column_dimensions['H'].width = 8
+ws.column_dimensions['I'].width = 8
+ws.column_dimensions['J'].width = 15
+ws.column_dimensions['K'].width = 13
+ws.column_dimensions['L'].width = 21
+ws.column_dimensions['M'].width = 21
+ws.column_dimensions['N'].width = 21
+ws.freeze_panes = 'A2'  #冻结窗格
+
+wb.remove_sheet(wb.worksheets[0])
+
+t = time.strftime("%Y%m%d",time.localtime(int(time.time())))
+wb.save(r'E:\监控报表\共享盘报表\数据源\[邮件推送]海外仓出库数据\海外仓出库数据%s.xlsx'%t)
+
+
+wb.save(r'\\10.1.1.20\物流部报表\海外仓数据\海外仓出库数据.xlsx')
+wb.save(r'\\10.1.1.20\物流部报表\海外仓数据\历史数据\海外仓出库数据%s.xlsx'%t)
