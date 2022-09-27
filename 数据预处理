@@ -18,8 +18,11 @@ sys.path.append(r'C:\Program Files\Google\Chrome\Application')
 
 
 # =============================================================================
-# 日期时间处理
+# -日期时间处理
 # =============================================================================
+import datetime
+import time
+from datetime import datetime, date, timedelta
 
 # datetime64[ns]中获取年份
 df1['提货年份']=df1['提货时间'].dt.year
@@ -27,9 +30,16 @@ df1['提货年份']=df1['提货时间'].dt.year
 # datetime64[ns]中获取月份
 df1['提货月份']=df1['提货时间'].dt.month
 
+date(2022, 9, 20)    # 返回datetime.date(2022, 9, 20)
+
 # 时间转换成年月
 df['处理年月']=df['处理时间'].astype(str).apply(lambda x :x[:7]).tolist()
+df_hl['年月'] = df_hl['年月'].apply(lambda x : str(x)[:7])
 data['发货年月']= strftime('%Y-%m',data['发货时间'])
+this_month = date.today().strftime('%Y-%m')                                         # 本月对应年月
+last_month = (date.today().replace(day=1) - timedelta(days = 1)).strftime('%Y-%m')  # 上月对应年月
+this_month_day = (date.today().replace(day=1) ).strftime('%Y-%m-%d')                # 本月1号日期
+(date.today().replace(day=1)- timedelta(days = 1)).replace(day=1)                   #上月1号日期
 
 # 返回周数
 df['发货周数']=df['发货日期'].apply(lambda x : datetime.datetime.strptime(x,'%Y-%m-%d').isocalendar()[1])
@@ -60,11 +70,29 @@ kb2['推送工作日天数'] = kb2.apply(lambda x : cal.busdaycount(x.推送时�
 # 打印当下时间
 time4 = time.time()
 print('数据导出完成时间',time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(int(time4))))
+print(datetime.now())
 
 # 打印间隔时长
 time1 = time.time()
 time2 = time.time()
 print('导数耗时:',time.strftime("%H:%M:%S",time.gmtime(time2-time1)))
+
+# 获取从start_date 到 end_date 一段时间内的日期列表/月初日期列表
+date_list = pd.DataFrame(data={'日期': pd.date_range(start_date,end_date)})    #start_date,end_date为参数
+# date_list = date_list.loc[date_list['日期'].dt.day ==1]  # 获取月初数据
+# date_list.reset_index(drop=True,inplace=True)
+date_list['日期'] = date_list['日期'].apply(lambda x : str(x)[:10])
+
+# 获取月初数据
+def monthlist(start_day):
+    today =  time.strftime('%Y-%m-%d',time.localtime(time.time()))
+    month_list = pd.DataFrame(data={'日期': pd.date_range(start_day,today)})
+    month_list = month_list.loc[month_list['日期'].dt.day ==1]
+    month_list['日期'] = month_list['日期'].apply(lambda x : str(x)[:10])
+    month_list['月份'] = month_list['日期'].apply(lambda x : str(x)[:7])
+    month_list = month_list.reset_index(drop=True)
+    return month_list
+
 
 
 # =============================================================================
@@ -72,10 +100,10 @@ print('导数耗时:',time.strftime("%H:%M:%S",time.gmtime(time2-time1)))
 # =============================================================================
 
 # 读取EXCEL
-df2=pd.read_excel(r'E:\监控报表\海运门到仓时效看板\海运时效标准.xlsx',sheet_name='头程起始地分类')
+df2=pd.read_excel(r'E:\监控报表\海运门到仓时效看板\海运时效标准.xlsx',sheet_name='头程起始地分类')   # Sheet_name 参数如果为空，则默认读取第一个工作表内容
 
 # 写入Excel（一个工作表）
-df20.to_csv(r'E:\监控报表\海运门到仓时效看板\[海运]海运门到仓数据.csv',index=False) # index=False 表示不写入编号
+df20.to_excel(r'E:\监控报表\海运门到仓时效看板\[海运]海运门到仓数据.xlsx',index=False) # index=False 表示不写入编号
 
 # 写入excel（多个工作表）
 write = pd.ExcelWriter(r'E:\KPI\计算数据\时效专项\[海外仓时效]卡车转运出库签收时效.xlsx')
@@ -84,7 +112,7 @@ df.to_excel(write,sheet_name='明细',index=False)
 write.save()
 
 # 筛选出没有匹配上仓库区域的退货仓库  并写入需维护基础表
-df_ckyc = df.loc[(df['退货仓库'].isnull()==False)&(df['仓库区域'].isnull())]
+df_ckyc = df.loc[(df['退货仓库'].notnull())&(df['仓库区域'].isnull())]    # isnull() notnull()
 df_ckyc = pd.DataFrame(list(set(df_ckyc['退货仓库'])))
 from openpyxl import Workbook, load_workbook
 wb = load_workbook(r'E:\需维护基础资料.xlsx')
@@ -99,25 +127,23 @@ wb.save(r'E:\需维护基础资料.xlsx')
 data1 = pd.read_csv(r'E:\！分析\1916-大货呆滞数据\基础数据\李娜数据导出2018-01-01至2018-03-01.csv',engine='python',encoding='gbk')
 data2 = pd.read_csv(r'E:\！分析\1916-大货呆滞数据\基础数据\李娜数据导出2018-03-01至2018-06-01.csv',engine='python',encoding='utf-8')
 
-# =============================================================================
-# 关联表
-# =============================================================================
+# 写入csv（一个工作表）
+df20.to_csv(r'E:\监控报表\海运门到仓时效看板\[海运]海运门到仓数据.csv',index=False) # index=False 表示不写入编号
 
-# join表
+# =============================================================================
+# 处理表
+# =============================================================================
+# join表  关联表
 df=pd.merge(df1,df2,left_on='头程起始地',right_on='头程起始地',how='left')  #左连接
 df=pd.merge(df1,df2,left_on='头程起始地',right_on='头程起始地',how='outer') #
 df=pd.merge(df,df3,left_on=['头程目的地','目的国'],right_on=['头程目的地','目的国'],how='left') #多个关联条件用[]
-
 
 # 拼接表
 data=pd.concat([data1,data2,data3,data4,data5])         #默认是纵向
 data=pd.concat([data1,data2,data3,data4,data5],axis=0)  #纵向拼接  
 data=pd.concat([data1,data2,data3,data4,data5],axis=1)  #横向拼接
 
-
-# =============================================================================
 # 复制表
-# =============================================================================
 kb = df.copy(deep=True)  # 用 kb = df 的复制方式，有些改动不会写入/修改df，导致出错  
 
 
@@ -166,6 +192,7 @@ xldd = xldd[['柜号','承运商线路名称','头程起始地','头程目的地
 
 # 复制列
 df_r['入库天数_工作日'] =df_r['实际到仓时间'].copy()
+df_r['入库天数_工作日'] =df_r['实际到仓时间'].copy(deep=True)   
 
 # 新增分段/分组列
 data['天数分段']= pd.cut(data['总时长'],[0,50,55,60,65,70,80,90,100,1000],
@@ -183,7 +210,10 @@ df_pp1['账号英文名'] = df_pp1['账号'].map(lambda x : x.split('-')[2] if x
 df['入库时间']=df['入库时间'].astype(str) #字符串
 df_r['入库天数_工作日']=df_r['入库天数_工作日'].astype(int) #整数
 d1['y'] = round(d1['y'],1)  # 四舍五入 保留一位小数点
-d3['超时未上网比例'] = (d3['超时未上网数据']/d3['已发货数据']).apply(lambda x : format(x,'0.1%'))  #修改成保留以为小数点的百分位数
+d3['超时未上网比例'] = (d3['超时未上网数据']/d3['已发货数据']).apply(lambda x : format(x,'0.1%'))  #修改成保留1位小数点的百分位数
+kb6_1['v4'] = kb6_1['订单费用_人民币'].apply(lambda x : '%.2f%%' % (x/total_fy*100))   #修改成保留2位小数点的百分位数
+kb5_3_hb['value1'] = kb5_3_hb['value1'].apply(lambda x :format(int(round(x,0)),','))   # 增加千位符（修改后就变成了文本格式，如果要按顺序展示，则需要先排序再修改格式，否则会乱）
+
 
 data['入库时间']=data['入库时间'].astype('datetime64[ns]') #日期时间
 kb2['推送时间_如空则取创建时间'] = kb2['推送时间_如空取创建时间'].apply(lambda x: datetime.strptime(str(x)[:10],'%Y-%m-%d'))  # 去除时分秒
@@ -227,6 +257,9 @@ kb31['实体仓'] = kb31['配送仓'].apply(lambda x : x.replace('HK-','')[:x.re
 df = pd.DataFrame(data={'A':['00-1','01-2','123']})
 df['A'].loc[df['A'].str.contains('-')] = df['A'].loc[df['A'].str.contains('-')].apply(lambda x : str(x)[:x.find('-')])
 
+# 增加前缀或后缀
+kb5_i_bar['区域归类'] = kb5_i_bar['区域归类'].apply(lambda x : str(x)+'订单费用')
+
 # 拼接字符
 tn = list(set(df1['追踪号']))
 def ad(x):
@@ -246,14 +279,7 @@ df['爽约次数'] = df['备注信息'].apply(lambda x : x.count('爽约'))
 
 # 排序  更改索引
 df3.sort_values(by=['SKU','仓库名称','创建日期'],ascending=[False,True,False],inplace=True)
-df3 = df3.reset_index(drop=True)  # 重置索引  索引值不变
-d3.index = range(len(d3))  # 索引值变成从0开始
-
-dfz.reset_index(drop=True,inplace=True)
-
-
-
-
+dfz.reset_index(drop=True,inplace=True)   # 删除原索引，重新创建从0开始的索引
 
 
 # 排名
@@ -262,6 +288,7 @@ obj.rank()                             # 默认情况下，rank是通过“为�
 obj.rank(method='first')               # method参数，first代表根据值在原数据中出现的顺序给出排名，max使用整个分组的最大排名  min使用整个分组的最小排名
 obj.rank(method='dense')               #dense 类似min，只是排名总是在组间+1，而不是组中相同的箱数
 
+kb2_5['排名'] =  kb2_5['订单费用'].rank(ascending = False)  #按照字段【订单费用】排名  ascending =False为降序排名
 
 # =============================================================================
 # 数据透视表
@@ -309,7 +336,7 @@ dfce['sku% of 发货年月'] = dfce['sku发货数量'] / dfce.groupby(level= 0 )
 dfce['包裹% of 发货年月'] = dfce['SKU包裹数量'] / dfce.groupby(level= 0 ).SKU包裹数量.transform(sum) * 100
 dfce.loc['total', :] = dfce.sum().values
 
-k2 =k2.groupby(['国+区域'])['上船时效'].apply(list).to_frame()
+k2 =k2.groupby(['国+区域'])['上船时效'].apply(list).to_frame()  # 把分组后的字段结果转换成list存入到一个字段中（常用于盒须图）
 
 
 
@@ -322,10 +349,64 @@ os.system("python E:\监控报表\海运预约送仓监控报表\预约送仓快
 
 
 
-kb = df.copy(deep=True)
+
+
 
 # =============================================================================
-# sql
+# 自定义函数
+# =============================================================================
+
+# 自定义函数：检验是否含有中文字符
+def is_contains_chinese(strs):
+    for _char in strs:
+        if '\u4e00' <= _char <= '\u9fa5':
+            return True
+    return False
+
+# 自定义函数：给定一个日期，返回日期所在周的周一
+def get_week_monday_by_date(date_str):
+    """
+    给定一个日期-返回日期所在周的周一0点时间 和 周日23点59分59秒
+    :param date_str: 如："2020-05-01"
+    :return: 给定一个日期-返回日期所在周的周一0点时间 和 周日23点59分59秒
+    """
+    now_time = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+    week_start_time = now_time - timedelta(days=now_time.weekday(), hours=now_time.hour, minutes=now_time.minute, seconds=now_time.second, microseconds=now_time.microsecond) 
+    return week_start_time
+
+# 自定义函数：拼接
+def ad(x):
+    return "'"+str(x)+"'"
+
+#################  自定义函数：   读取某个文件夹内的所有EXCEL内容，并合并成一个数据源
+import os
+import os.path
+import collections
+#使用os模块walk函数，搜索出某目录下的全部excel文件
+def getFileName(filepath):
+    file_list = []
+    for root,dirs,files in os.walk(filepath):
+        for filespath in files:
+            print(os.path.join(root,filespath))
+            file_list.append(os.path.join(root,filespath))
+    return file_list
+#合并excel
+def Mergecsv(filepath1):                         #filepath1 文件夹路径 
+    file_list=getFileName(filepath1)
+    result=collections.defaultdict(pd.DataFrame)
+    df_list=[] 
+    #合并多个excel文件
+    for each in file_list:
+        #读取xlsx格式文件
+        data=pd.read_excel(each,sheet_name='Sheet1')
+        df_list.append(data)   
+    df=pd.concat(df_list)
+    return df
+df_gzhz = Mergecsv(r'E:\专项分析\索赔专项\上网异常索赔\1_收集的跟踪回复')
+
+
+# =============================================================================
+# -sql
 # =============================================================================
 
 IFNULL(cc.shipment_type_name, t2.shipment_type)
@@ -341,8 +422,22 @@ SUBSTRING_INDEX(SUBSTRING_INDEX(C.`name`,'-',2),'-',-1)  '配送仓',
 
 CAST(DATE_ADD(DATE'{j}',INTERVAL 1 MONTH) AS DATE) 
 
- DATE(NOW())
+DATE(NOW())
 
+# 数据源样式{"feeDetails":[{"currencyCode":"GBP","feeId":177,"feeValue":1.295000,"ferRuleTypeId":10,"name":"自发货操作费"},{"currencyCode":"GBP","feeId":102,"feeValue":0,"ferRuleTypeId":23,"name":"拍照费"}],"feeSum":1.295000,"operationFee":1.295000,"pictureFee":0,"warehouseId":59}
+# json_extract 函数
+json_extract(outbound_warehouse_fee_json,"$.feeSum")   # 读取json字段【outbound_warehouse_fee_json】的所有【feeSum】数据
+json_extract(outbound_warehouse_fee_json,"$[0].feeSum")   # 读取json字段【outbound_warehouse_fee_json】的第一个【feeSum】数据
+
+# 数据源样式{"baseFee":6.15,"currencyCode":"GBP","deliverDays":"2~6","discountFee":0.00,"feeDetail":[{"exclude":false,"feeItemCode":"FEE_BASIC","feeItemName":"基础计费","feeValue":6.15,"zoneName":"GB"},{"exclude":false,"feeItemCode":"FEE_FUEL","feeItemName":"燃油费","feeValue":0.00},{"exclude":false,"feeItemCode":"FEE_DISCOUNT","feeItemName":"折扣费","feeValue":0.00}],"feeFaraway":false,"feeFaraway2":false,"feeSum":6.15,"fuelFee":0.00,"logisticsProductId":138,"logisticsProductName":"48H大包_签收","otherFee":0.00,"volumeWeight":false,"warehouseId":59,"zoneName":"GB","zoneNames":["GB"]}
+json_extract(json_extract(logistics_fee_json,"$.feeDetail"),replace(replace(JSON_SEARCH(json_extract(logistics_fee_json,"$.feeDetail"),'all','偏远计费'),'feeItemName','feeValue'),'"',''))   '偏远费',
+# JSON_SEARCH 函数
+JSON_SEARCH(json_extract(logistics_fee_json,"$.feeDetail"),'all','偏远计费')  #  返回结果示例  "$[3].feeItemName"
+# JSON_SEARCH(json_doc,one_or_all,search_str)  #通过JSON_SEARCH函数，返回符合查询条件的key对应的的JSON路径所组成的数组，若不存在，则返回NULL
+
+# replace 函数
+replace('"$[3].feeItemName"','"','')   #  去除双引号
+replace('"$[3].feeItemName"','feeItemName','feeValue')   # 把feeItemName 替换成 feeValue
 
 # =============================================================================
 # # 传递参数 1、 format    2、%s
@@ -360,29 +455,20 @@ GROUP BY package_number,operation_user
 
 
 t = time.strftime("%Y%m%d",time.localtime(int(time.time())))
+df.to_excel(r'E:\dashboard_data\cangzu\d5%s.xlsx'.%t,index=False)
 
 
 
-# 获取月初数据
-def monthlist(start_day):
-    today =  time.strftime('%Y-%m-%d',time.localtime(time.time()))
-    month_list = pd.DataFrame(data={'日期': pd.date_range(start_day,today)})
-    month_list = month_list.loc[month_list['日期'].dt.day ==1]
-    month_list['日期'] = month_list['日期'].apply(lambda x : str(x)[:10])
-    month_list['月份'] = month_list['日期'].apply(lambda x : str(x)[:7])
-    month_list = month_list.reset_index(drop=True)
-    return month_list
 
 
 # =============================================================================
-# 计算
+# -计算 -运算
 # =============================================================================
-# 不重复计数
-kb12 = len(kb12['包裹编号'].unique())
+a = len(kb12['包裹编号'].unique())  # 不重复计数
+a = len(kb12['包裹编号'])  # 计数
+a = sum(kb12['包裹编号'])  # 求和
 
-# =============================================================================
 # 两个dataFrame运算
-# =============================================================================
 df1.add(df2, fill_value=0)   # fill_value = 0  这个参数是为了防止只有一个df有值时，导致空值运算结果为空问题
 
 
