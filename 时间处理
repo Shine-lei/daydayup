@@ -1,0 +1,165 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Jul 22 18:04:59 2021
+
+时间处理
+
+@author: Administrator
+"""
+import pandas as pd
+import numpy as np
+import pymysql
+import datetime
+import time
+from datetime import timedelta
+from datetime import datetime
+from ftplib import FTP
+import sys, getpass, os.path
+from retrying import retry  # => 引入retry装饰器
+import re
+from business_calendar import Calendar, MO, TU, WE, TH, FR
+from dateutil.relativedelta import *
+
+# 获取今天日期
+
+
+
+# =============================================================================
+#    time 
+#
+# 时间类型转换
+# 时间类型：时间戳  struct_time
+# =============================================================================
+# 时间戳  一串数字
+time.time()   #返回当前时间戳
+
+# 把时间戳换成时间元祖  gmtime()  localtime() strptime() 
+# struct_time  #  它是一个带有 named tuple 接口的对象：可以通过索引和属性名访问值
+time.gmtime(time.time())     # 把时间戳换成了0时区的时间元祖
+time.localtime(time.time())  # 把时间戳换成了本地时区的时间元祖
+time.localtime(int(time.time())).tm_year  #属性名 有 tm_year年 tm_mon月 tm_mday日 tm_hour时 tm_min分 tm_sec秒 tm_wday周几（0-6，周一为0）tm_yday 年天数（1-366）
+
+# 把字符串换成时间元祖 strptime()
+time.strptime('2021-07-22 18:43:54', "%Y-%m-%d %H:%M:%S")  # 把字符串换成了本地时区的时间元祖
+time.localtime(int(time.time()))  
+
+# 把时间元祖转换成指定格式的字符串     strftime()
+time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
+
+today = datetime.strptime(time.strftime("%Y-%m-%d",time.localtime(int(time.time()))), "%Y-%m-%d") 
+today.strftime('%Y%m%d')
+
+# 把时间元祖转换成时间戳  mktime()
+time.mktime(time.localtime(time.time()))
+
+
+# =============================================================================
+#    datetime 
+# https://docs.python.org/3/library/datetime.html
+# 时间类型转换
+# 时间类型：时间戳  struct_time
+# =============================================================================
+
+
+kb11 = str( max(kb1['发货时间']))[:7]
+
+# 从datetime类型转换到字符型年月日
+df_rk['实际到仓时间'] = df_rk['实际到仓时间'].apply(lambda x : str(x)[:10])
+
+
+df['日期_周'] = df['操作时间'].apply(lambda x : get_week_monday_by_date(str(x)))
+df['日期_周'] = df['日期_周'].apply(lambda x : datetime.strftime(x,'%Y/%m/%d'))
+
+
+data['入库时间']=data['入库时间'].astype('datetime64[ns]') #日期时间
+kb2['推送时间_如空则取创建时间'] = kb2['推送时间_如空取创建时间'].apply(lambda x: datetime.strptime(str(x)[:10],'%Y-%m-%d'))  # 去除时分秒
+d2['推送时间_如空取创建时间'] = d2['推送时间_如空取创建时间'].apply(lambda x :datetime.strftime(x,'%m/%d'))   #修改日期格式
+kb6['发货日期']  = pd.to_datetime(kb6['发货时间'])  #将object改成datetime格式
+
+# =============================================================================
+# 生成时间列表&范围
+# =============================================================================
+
+
+# 生成一串日期列表
+def datelist(beginDate, endDate):
+    # beginDate, endDate是形如‘20160601’的字符串或datetime格式
+    date_l=[datetime.strftime(x,'%Y-%m-%d') for x in list(pd.date_range(start=beginDate, end=endDate))]
+    return date_l
+
+today = datetime.strptime(time.strftime("%Y-%m-%d",time.localtime(int(time.time()))), "%Y-%m-%d") 
+start_date = (today + timedelta(days=-70)).strftime('%Y%m%d')                                               #开始时间今天减70天
+end_date = today.strftime('%Y%m%d')
+datelist = datelist( start_date , end_date)     #  形如‘20160601’的字符串
+datelist = datelist( today+ timedelta(days=-10) , today)  #  datetime格式
+
+
+pd.date_range(start=today+ timedelta(days=-10), end=today)
+
+def datelist(beginDate, endDate):
+    # beginDate, endDate是形如‘20160601’的字符串或datetime格式
+    date_l=[datetime.strftime(x,'%Y-%m-%d') for x in list(pd.date_range(start=beginDate, end=endDate))]
+    return date_l
+
+
+
+# 自定义函数--获取每周的星期一
+import datetime
+import time
+from datetime import timedelta
+from datetime import datetime
+
+def get_week_monday_by_date(date_str):
+    """
+    给定一个日期-返回日期所在周的周一0点时间 和 周日23点59分59秒
+    :param date_str: 如："2020-05-01"
+    :return: 给定一个日期-返回日期所在周的周一0点时间 和 周日23点59分59秒
+    """
+    now_time = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+    week_start_time = now_time - timedelta(days=now_time.weekday(), hours=now_time.hour, minutes=now_time.minute, seconds=now_time.second, microseconds=now_time.microsecond) 
+    return week_start_time
+
+# 各时间节点 ： 上周日期 本周日期  今天
+today = datetime.strptime(time.strftime("%Y-%m-%d",time.localtime(int(time.time()))), "%Y-%m-%d") 
+this_week = get_week_monday_by_date( str(today))                                     # 本周周一
+last_week = get_week_monday_by_date( str(today+ timedelta(days=-7)))                 # 上周周一
+last_month_week = get_week_monday_by_date( str(today+ timedelta(weeks=-5)))          # 上月同周周一
+
+
+
+
+
+# 生成近6月月初日期
+nianyue_list=[]
+for i in range(-6,1):
+    j = today - timedelta(days = today.day-1) + relativedelta(months = i)
+    j = str(j)[:7]
+    nianyue_list.append(j)
+
+
+rq['周数']=rq['日期范围'].apply(lambda x : datetime.strptime(x,'%Y-%m-%d').isocalendar()[1])
+rq['年月']=rq['日期范围'].astype(str).apply(lambda x :x[:7]).tolist()
+
+
+time1 = time.time()
+time2 = time.time()
+time3 = time.time()
+time4 = time.time()
+print('数据导出完成时间',time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(int(time4))))
+print('导数耗时:',time.strftime("%H:%M:%S",time.gmtime(time2-time1)))
+print('数据预处理耗时:',time.strftime("%H:%M:%S",time.gmtime(time3-time2)))
+print('数据导出耗时:',time.strftime("%H:%M:%S",time.gmtime(time4-time3)))
+print('总耗时:',time.strftime("%H:%M:%S",time.gmtime(time4-time1)))
+
+
+
+df1['提货年份']=df1['提货时间'].dt.year
+df1['提货月份']=df1['提货时间'].dt.month
+
+
+def excel_date(dates):#定义转化日期戳的函数,dates为日期戳
+    delta=timedelta(days=dates)
+    today=datetime.strptime('1899-12-30','%Y-%m-%d')+delta#将1899-12-30转化为可以计算的时间格式并加上要转化的日期戳
+    return datetime.strftime(today,'%Y-%m-%d')#制定输出日期的格式
+
+huifu['回复日期'] = huifu.apply(lambda x : excel_date(x.回复日期),axis=1)
