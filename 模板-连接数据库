@@ -11,8 +11,10 @@ import datetime
 from retrying import retry  # => 引入retry装饰器
 
 d = pd.read_excel(r'E:\数据库密码.xlsx')
-pby = d['密码'][0]
-pzf = d['密码'][1]
+pby = d['密码'][0] #佰易
+pzf = d['密码'][1] #新自发
+pss = d['密码'][6] #费用试算
+pjd = d['密码'][5] #金蝶
 p = d['密码'][2]  #ftp
 
 
@@ -92,6 +94,75 @@ def data_out_sql2(sql):
     
     print(data)
     return data
+
+
+# =============================================================================
+# #连接费用试算数据库  数据库密码通过读取本地EXCEL文件获取
+# =============================================================================
+@retry(stop_max_attempt_number=5)   #装饰你想重试的函数，注意这里有括号,stop_max_attempt_number 最大重试次数
+# 费用试算
+def data_out_sql3(sql):
+    conn =  pymysql.connect(host = 'yiru.mysql.db.com' #host属性
+                             ,user = 'tms_logistic_reader' #用户名 
+                             ,password = pss  #此处填登录数据库的密码
+                             ,db = 'logistics' #数据库名
+                             , charset='utf8'
+                             )
+    # 创建游标
+    cursor = conn.cursor()
+    # 执行sql语句
+    cursor.execute(sql)
+    # 调出数据
+    data = cursor.fetchall()
+    # cols为字段信息 例如(('factory_id', 253, None, 6, 6, 0, False), ('szDeviceId', 253, None, 30, 30, 0, False),('update_time', 7, None, 19, 19, 0, False))
+    cols = cursor.description
+    # 执行
+    conn.commit()
+    conn.close()
+    # 将数据truple转换为DataFrame
+    col = []
+    for i in cols:
+        col.append(i[0])
+    data = list(map(list, data))
+    data = pd.DataFrame(data,columns=col)
+    
+    print(data)
+    return data
+
+# =============================================================================
+# #连接金蝶数据库  数据库密码通过读取本地EXCEL文件获取
+# =============================================================================
+@retry(stop_max_attempt_number=5)   #装饰你想重试的函数，注意这里有括号,stop_max_attempt_number 最大重试次数
+# 金蝶
+def data_out_sql4(sql):
+    conn =  pymysql.connect(host = 'byfinance.mysql.db.com' #host属性
+                             ,user = 'tms_logistic_reader' #用户名 
+                             ,password = pjd  #此处填登录数据库的密码
+                             ,db = 'kingdee_infra' #数据库名
+                             , charset='utf8'
+                             , port = 6111
+                             )
+    # 创建游标
+    cursor = conn.cursor()
+    # 执行sql语句
+    cursor.execute(sql)
+    # 调出数据
+    data = cursor.fetchall()
+    # cols为字段信息 例如(('factory_id', 253, None, 6, 6, 0, False), ('szDeviceId', 253, None, 30, 30, 0, False),('update_time', 7, None, 19, 19, 0, False))
+    cols = cursor.description
+    # 执行
+    conn.commit()
+    conn.close()
+    # 将数据truple转换为DataFrame
+    col = []
+    for i in cols:
+        col.append(i[0])
+    data = list(map(list, data))
+    data = pd.DataFrame(data,columns=col)
+    
+    print(data)
+    return data
+
 
 
 # =============================================================================
