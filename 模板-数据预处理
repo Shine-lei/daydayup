@@ -133,6 +133,19 @@ data2 = pd.read_csv(r'E:\！分析\1916-大货呆滞数据\基础数据\李娜�
 # 写入csv（一个工作表）
 df20.to_csv(r'E:\监控报表\海运门到仓时效看板\[海运]海运门到仓数据.csv',index=False) # index=False 表示不写入编号
 
+
+# 读取大文件的表头或指定行
+import openpyxl as opx
+wb = opx.load_workbook(r'\\10.1.1.20\物流部报表\经管数据\预估_订单\{j}.xlsx'.format(j=gzb1), read_only=True)
+sheet = wb['Sheet1']
+cols = [i.value for i in sheet[1]]  #第一行，表头
+heads = [i.value for i in sheet[2]] # 第二行
+wb.close()
+# Python 读取超大 Excel 文件表头
+# https://www.gairuo.com/m/python-large-excel-header
+
+
+
 # =============================================================================
 # 处理表
 # =============================================================================
@@ -216,12 +229,17 @@ d1['y'] = round(d1['y'],1)  # 四舍五入 保留一位小数点
 d3['超时未上网比例'] = (d3['超时未上网数据']/d3['已发货数据']).apply(lambda x : format(x,'0.1%'))  #修改成保留1位小数点的百分位数
 kb6_1['v4'] = kb6_1['订单费用_人民币'].apply(lambda x : '%.2f%%' % (x/total_fy*100))   #修改成保留2位小数点的百分位数
 kb5_3_hb['value1'] = kb5_3_hb['value1'].apply(lambda x :format(int(round(x,0)),','))   # 增加千位符（修改后就变成了文本格式，如果要按顺序展示，则需要先排序再修改格式，否则会乱）
-
-
 data['入库时间']=data['入库时间'].astype('datetime64[ns]') #日期时间
 kb2['推送时间_如空则取创建时间'] = kb2['推送时间_如空取创建时间'].apply(lambda x: datetime.strptime(str(x)[:10],'%Y-%m-%d'))  # 去除时分秒
 d2['推送时间_如空取创建时间'] = d2['推送时间_如空取创建时间'].apply(lambda x :datetime.strftime(x,'%m/%d'))   #修改日期格式
 kb6['发货日期']  = pd.to_datetime(kb6['发货时间'])  #将object改成datetime格式
+
+# 批量更改字段格式
+df[['two', 'three']] = df[['two', 'three']].astype(float)  # 批量修改指定格式
+df_by[['箱数DB','数量DB','重量DB','体积DB']] = df_by[['箱数DB','数量DB','重量DB','体积DB']].apply(pd.to_numeric)   # 批量修改成数字格式
+df.apply(pd.to_numeric, errors='ignore')   #可能不知道哪些列可以可靠地转换为数字类型。在这种情况下，设置参数：
+df_by2 = df_by2.apply(pd.to_numeric, errors='ignore')
+
 
 # dataframe 去重
 df = df.drop_duplicates()
@@ -241,6 +259,8 @@ for i in range(-6,1):
     j = str(j)[:7]
     nianyue_list.append(j)
 d1 = pd.DataFrame({'x':nianyue_list})
+
+(date.today().replace(day=1) - relativedelta(months = 3)).strftime('%Y-%m')
 
 d8 = pd.DataFrame({'value1':d81,'value2':d82,'value3':d83,'value4':d84,'value5':d85,'value6':update_time},index=[0])
 
@@ -299,6 +319,23 @@ obj.rank(method='dense')               #dense 类似min，只是排名总是在�
 
 kb2_5['排名'] =  kb2_5['订单费用'].rank(ascending = False)  #按照字段【订单费用】排名  ascending =False为降序排名
 
+
+# 判断是否为数字
+def is_number(s):    
+    try:    # 如果能运⾏ float(s) 语句，返回 True（字符串 s 是浮点数）        
+        float(s)        
+        return True    
+    except ValueError:  # ValueError 为 Python 的一种标准异常，表示"传入无效的参数"        
+        pass  # 如果引发了 ValueError 这种异常，不做任何事情（pass：不做任何事情，一般只做占位语句）    
+    try:        
+        import unicodedata  # 处理 ASCII 码的包        
+        unicodedata.numeric(s)  # 把一个表示数字的字符串转换为浮点数返回的函数        
+        return True    
+    except (TypeError, ValueError):        
+        pass    
+        return False
+df_qtfy['金额_isnum'] = df_qtfy['金额'].apply(lambda x : is_number(x))
+
 # =============================================================================
 # 数据透视表
 # =============================================================================
@@ -307,6 +344,15 @@ kb2_5['排名'] =  kb2_5['订单费用'].rank(ascending = False)  #按照字段�
 kb32 = kb32.pivot_table(index=['实体仓'],values=['包裹编号'],aggfunc=(lambda x : len(x.unique())),margins=True,dropna=False)
 kb30 = kb3.pivot_table(index='事业部',values='计划退回金额',aggfunc=np.sum,margins=True,dropna=False ).sort_values(by=['计划退回金额'], ascending=False)
 
+# 重命名列
+for i in range(0,l+2):
+    j = list(df.columns)[i]
+    if j.find('操作体积') >= 0 :
+        k = j.replace("('操作体积', '","").replace("')","体积")
+        df.rename(columns={j:k},inplace=True)
+    if j.find('操作数量') >= 0 :
+        k = j.replace("('操作数量', '","").replace("')","数量")
+        df.rename(columns={j:k},inplace=True)
 
 # 求和
 df_s1 = df.pivot_table(index=['处理年月','是否达标'],values=['箱数'],aggfunc=np.sum,margins=False)   # margins代表是否汇总，不填默认是false不汇总
@@ -344,6 +390,8 @@ dfce['sku% of Total'] = dfce['sku发货数量'] /dfce['sku发货数量'] .sum() 
 dfce['sku% of 发货年月'] = dfce['sku发货数量'] / dfce.groupby(level= 0 ).sku发货数量.transform(sum) * 100
 dfce['包裹% of 发货年月'] = dfce['SKU包裹数量'] / dfce.groupby(level= 0 ).SKU包裹数量.transform(sum) * 100
 dfce.loc['total', :] = dfce.sum().values
+
+gl3['柜号个数'] = gl3.groupby('柜号')['柜号'].transform('count')   # 添加计数列
 
 k2 =k2.groupby(['国+区域'])['上船时效'].apply(list).to_frame()  # 把分组后的字段结果转换成list存入到一个字段中（常用于盒须图）
 
@@ -464,7 +512,7 @@ GROUP BY package_number,operation_user
 
 
 t = time.strftime("%Y%m%d",time.localtime(int(time.time())))
-df.to_excel(r'E:\dashboard_data\cangzu\d5%s.xlsx'.%t,index=False)
+df.to_excel(r'E:\dashboard_data\cangzu\d5%s.xlsx'%t,index=False)
 
 
 
