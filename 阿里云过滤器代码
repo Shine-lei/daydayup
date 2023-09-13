@@ -1,0 +1,108 @@
+# getLocalValue
+# 获取数据源 --data5是全局变量
+return getLocalValue('data5');
+
+# 获取数据源，根据筛选变量筛选，返回筛选结果  --data5 sxx是全局变量
+let allData = getLocalValue('data5');
+return allData.filter(item => {
+  return item.key1.includes(getCallbackValue('sxx'))
+});
+
+# 获取数据源，根据多个条件筛选变量筛选，返回筛选结果   --data5 dbqk sxx是全局变量
+let allData = getLocalValue('data3');
+return allData.filter(item => {
+  return item.dc.includes(getCallbackValue('dbqk')) && item.wd.includes(getCallbackValue('sxx'))
+});
+
+# 判断数据源是否包含字符串 
+return data.value.includes("_2");
+
+# 数据源替换字段
+return [{
+  "value": data.title.replace('承运商', ''),
+  "url": ""
+}];
+
+# 判断数据源是否获取成功
+return getLocalValue('data5') && getLocalValue('data5').length > 0;
+
+
+
+# getCallbackValue  #获取变量结果  
+# 判断变量结果是否等于指定值
+return getCallbackValue('qy') == 'all';
+return getCallbackValue('zb1') + '_' + getCallbackValue('zb2') == '1_1';
+
+# 判断value是否等于指定值
+return data.value == 1;
+
+# 返回数据给通用标题控件
+return [{
+  "value": "事业部",
+  "url": ""
+}];
+
+# 返回变量的title字段 给通用标题控件
+return [{
+  "value": data.title,
+  "url": ""
+}];
+
+# 返回数据源的指定字段 给通用标题控件
+let allData = getLocalValue('data1');
+return [{
+  "value": allData[0].v1,
+  "url": ""
+}];
+
+# 如果y列是字符串格式，转换成数值型
+if (Array.isArray(data)) {
+  data.forEach(row => {
+    row.y = typeof row.y === 'string' ? Number(row.y) : row.y
+  })
+}
+return data
+
+# 返回指定格式  需要完整的格式
+return {
+  "series": [{
+    "bar": {
+      "show": true,
+      "color": {
+        "style": "single",
+        "value": "#1890ff",
+        "from": "#70deff",
+        "to": "#0a73ff",
+        "angle": 90
+      },
+      "label": {
+        "pos": "top",
+        "show": true,
+        "color": "#fff",
+        "fontSize": 12,
+        "fontWeight": "normal"
+      },
+      "showName": data.title + '-柱'
+    },
+    "line": {
+      "show": true,
+      "color": "#faad14",
+      "label": {
+        "show": true,
+        "color": "#fff",
+        "fontSize": 12,
+        "fontWeight": "normal"
+      },
+      "point": {
+        "show": "true",
+        "radius": 4
+      },
+      "style": "solid",
+      "showName": data.title + '-线',
+      "interpolate": true,
+      "stroke-width": 2
+    },
+    "value": data.title,
+    "_active": true
+  }]
+};
