@@ -64,6 +64,27 @@ if (Array.isArray(data)) {
 }
 return data
 
+# 从数据源表格中，获取指定字段并求和计算，返回到文本型标题控件中  x_sq y_sq是数据源字段名
+function filter(data, x, y) {
+  var _ref;
+  var x_sum = 0;
+  var y_sum = 0;
+  if (Array.isArray(data)) {
+    data.forEach(function(row) {
+      x_sum += Number(row[x]) || 0;
+      y_sum += Number(row[y]) || 0;
+    });
+  }
+  // Empty
+  if (!x_sum || !y_sum) return '-';
+  return ((_ref = (1 - x_sum / y_sum) * 100) === null || _ref === void 0 ? void 0 : _ref.toFixed(0)) + '%';
+};
+let allData = getLocalValue('data1_1sx');
+return [{
+  "value": filter(allData, 'x_sq', 'y_sq'),
+  "url": ""
+}];
+
 # 返回指定格式  需要完整的格式
 return {
   "series": [{
