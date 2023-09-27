@@ -32,6 +32,7 @@ return getLocalValue('data5') && getLocalValue('data5').length > 0;
 # 判断变量结果是否等于指定值
 return getCallbackValue('qy') == 'all';
 return getCallbackValue('zb1') + '_' + getCallbackValue('zb2') == '1_1';
+return getCallbackValue('sxx') == '';
 
 # 判断value是否等于指定值
 return data.value == 1;
