@@ -83,7 +83,7 @@ def count_businessday(start_day,end_day,holidays,extra_work_day):
     b = CustomBusinessDay(holidays=holidays)
     bus_day = pd.date_range(start=start_day,end=end_day, freq=b)
     length = len(bus_day)
-    extra_len = 0
+    extra_len = 0   
     if len(extra_work_day)>0:
         for i in extra_work_day:
             if i >=start_day and i <=end_day:
@@ -93,3 +93,17 @@ def count_businessday(start_day,end_day,holidays,extra_work_day):
     else:
         work_day = length+extra_len-1
     return work_day
+
+def ad(x):
+    return "'"+str(x)+"'"
+
+def get_sql_by_list(list_n,data_out_sql,sql):
+    dfi = []
+    l =  int(((len(list_n)-1)/300+1)+1)
+    for i in range(1,l):
+        lisi = list_n[(i-1)*300:i*300]
+        sqli = sql.format(j=','.join(map(ad, lisi)))
+        dfi.append(data_out_sql(sqli))
+    df = pd.concat(dfi)
+    df.reset_index(drop=True,inplace=True)
+    return df
