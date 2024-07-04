@@ -104,6 +104,9 @@ def get_sql_by_list(list_n,data_out_sql,sql):
         lisi = list_n[(i-1)*300:i*300]
         sqli = sql.format(j=','.join(map(ad, lisi)))
         dfi.append(data_out_sql(sqli))
-    df = pd.concat(dfi)
-    df.reset_index(drop=True,inplace=True)
+    if len(dfi)>0:
+        df = pd.concat(dfi)
+        df.reset_index(drop=True,inplace=True)
+    else:
+        df = pd.DataFrame()
     return df
